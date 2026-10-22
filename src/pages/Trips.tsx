@@ -269,7 +269,7 @@ function TripForm({ trip, onClose, onSaved }: { trip: Trip; onClose: () => void;
         <Field label="Start"><input type="date" required value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} /></Field>
         <Field label="End"><input type="date" required value={f.endDate} onChange={e => setF({ ...f, endDate: e.target.value })} /></Field>
         <Field label="Total budget"><NumInput required min={0} value={f.budget} placeholder="0" onChange={v => setF({ ...f, budget: v })} /></Field>
-        <Field label="Icon">
+        <Field group label="Icon">
           <div className="emoji-pick">{EMOJIS.map(e => <button type="button" key={e} className={f.emoji === e ? 'on' : ''} onClick={() => setF({ ...f, emoji: e })}>{e}</button>)}</div>
         </Field>
         <Field label="Travellers (comma separated)" span><input value={travelers} onChange={e => setTravelers(e.target.value)} /></Field>

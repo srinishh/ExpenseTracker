@@ -117,7 +117,7 @@ function GoalForm({ goal, onClose }: { goal: Goal; onClose: () => void }) {
         <Field label="Target"><NumInput required min={1} value={f.target} placeholder="0" onChange={v => setF({ ...f, target: v })} /></Field>
         <Field label="Already saved"><NumInput min={0} value={f.saved} placeholder="0" onChange={v => setF({ ...f, saved: v })} /></Field>
         <Field label="Target date (optional)"><input type="date" value={f.deadline ?? ''} onChange={e => setF({ ...f, deadline: e.target.value || undefined })} /></Field>
-        <Field label="Icon"><div className="emoji-pick">{GOAL_EMOJI.map(e => <button type="button" key={e} className={f.emoji === e ? 'on' : ''} onClick={() => setF({ ...f, emoji: e })}>{e}</button>)}</div></Field>
+        <Field group label="Icon"><div className="emoji-pick">{GOAL_EMOJI.map(e => <button type="button" key={e} className={f.emoji === e ? 'on' : ''} onClick={() => setF({ ...f, emoji: e })}>{e}</button>)}</div></Field>
         <div className="form-actions span-2">
           {f.id && <button type="button" className="btn btn-danger" onClick={() => { if (confirm('Delete goal?')) { update(d => { d.goals = d.goals.filter(g => g.id !== f.id) }); onClose() } }}>Delete</button>}
           <span className="grow" />

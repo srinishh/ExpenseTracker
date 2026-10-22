@@ -194,7 +194,7 @@ function MemberForm({ member, onClose, onDeleted }: { member: Member; onClose: (
       <form onSubmit={save} className="form-grid">
         <Field label="Name"><input required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} autoFocus /></Field>
         <Field label="Relation"><input value={f.relation} placeholder="Spouse, Father…" onChange={e => setF({ ...f, relation: e.target.value })} /></Field>
-        <Field label="Colour" span>
+        <Field group label="Colour" span>
           <div className="swatches">
             {PALETTE.map(c => <button type="button" key={c} className={`swatch ${f.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => setF({ ...f, color: c })} aria-label={c} />)}
           </div>

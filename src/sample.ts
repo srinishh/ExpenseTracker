@@ -56,6 +56,10 @@ export function sampleData(): AppData {
   // Recurring monthly costs
   expenses.push({ id: uid(), description: 'House rent', category: 'Rent & Housing', amount: 42000, date: m(-11, 3), method: 'bank', recurring: true })
   expenses.push({ id: uid(), description: 'Netflix + Spotify', category: 'Subscriptions', amount: 848, date: m(-11, 9), method: 'card', cardId: 'axis', billed: true, recurring: true })
+  expenses.push({ id: uid(), description: 'Nifty 50 index fund SIP', category: 'SIP & Mutual Funds', amount: 15000, date: m(-11, 5), method: 'bank', recurring: true })
+  expenses.push({ id: uid(), description: 'PPF contribution', category: 'PPF / NPS / EPF', amount: 5000, date: m(-11, 10), method: 'bank', recurring: true })
+  expenses.push({ id: uid(), description: 'Bought HDFC Bank shares', category: 'Stocks', amount: 12000, date: m(-1, 16), method: 'bank' })
+  expenses.push({ id: uid(), description: 'Digital gold', category: 'Gold', amount: 3000, date: m(0, Math.min(day, 6)), method: 'upi' })
   expenses.push({ id: uid(), description: 'Term + health insurance', category: 'Insurance', amount: 4200, date: m(-11, 15), method: 'bank', recurring: true })
   // Variable spends for the last 6 months
   const pattern: [number, string, string, number, Partial<Expense>?][] = [

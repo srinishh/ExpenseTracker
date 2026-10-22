@@ -23,13 +23,15 @@ export function Modal({ open, onClose, title, children, wide }: {
   )
 }
 
-export function Field({ label, children, hint, span }: { label: string; children: ReactNode; hint?: string; span?: boolean }) {
+/** `group` renders a div instead of a label, for fields holding several buttons: a label forwards clicks on its text to the first button. */
+export function Field({ label, children, hint, span, group }: { label: string; children: ReactNode; hint?: string; span?: boolean; group?: boolean }) {
+  const Tag = group ? 'div' : 'label'
   return (
-    <label className={`field ${span ? 'span-2' : ''}`}>
+    <Tag className={`field ${span ? 'span-2' : ''}`} role={group ? 'group' : undefined} aria-label={group ? label : undefined}>
       <span className="field-label">{label}</span>
       {children}
       {hint && <span className="field-hint">{hint}</span>}
-    </label>
+    </Tag>
   )
 }
 

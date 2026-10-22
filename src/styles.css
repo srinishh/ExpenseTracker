@@ -18,6 +18,9 @@
   --c-spend: #f97316;
   --c-emi: #8b5cf6;
   --c-planned: #cbd5e1;
+  --c-needs: #0ea5e9;
+  --c-wants: #f472b6;
+  --c-invest: #22c55e;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
   --radius: 14px;
   color-scheme: light;
@@ -361,4 +364,31 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 @media (max-width: 860px) {
   .sync-badge { position: fixed; top: 10px; right: 10px; z-index: 45; margin: 0; padding: 4px 8px; box-shadow: var(--shadow); }
   .sync-badge span:last-child { display: none; }
+}
+
+/* ---------- needs / wants / investments ---------- */
+.split-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.split-mini { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.split-track { position: relative; height: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 99px; }
+.split-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+.split-target { position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--text); border-radius: 2px; transform: translateX(-1px); }
+.target-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.target-input { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 13px; }
+.target-input input { width: 72px; text-align: right; }
+.split-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; font-size: 12px; font-weight: 700; color: #fff; }
+.split-bar > div { display: grid; place-items: center; min-width: 0; transition: flex 0.3s; }
+.cat-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+.cat-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.bucket-seg button { white-space: nowrap; padding: 4px 10px; }
+.seg button.on.b-needs { background: var(--c-needs); color: #fff; }
+.seg button.on.b-wants { background: var(--c-wants); color: #fff; }
+.seg button.on.b-invest { background: var(--c-invest); color: #fff; }
+.bucket-filter { display: flex; overflow-x: auto; max-width: 100%; }
+.bucket-filter button { white-space: nowrap; }
+.pill-needs { background: color-mix(in srgb, var(--c-needs) 16%, transparent); color: var(--c-needs); }
+.pill-wants { background: color-mix(in srgb, var(--c-wants) 16%, transparent); color: var(--c-wants); }
+.pill-invest { background: color-mix(in srgb, var(--c-invest) 16%, transparent); color: var(--c-invest); }
+@media (max-width: 860px) {
+  .split-strip, .target-grid, .cat-map { grid-template-columns: 1fr; }
+  .split-strip { gap: 14px; }
 }

@@ -5,7 +5,7 @@ import {
 import { useStore } from '../store'
 import { Avatar, Card, Empty, PageHeader, Progress, Stat } from '../components/ui'
 import {
-  CATEGORY_EMOJI, PALETTE, addMonths, cardStatus, currentYM, dateLabel, daysUntil, emiDueIn, emiStatus,
+  BUCKETS, CATEGORY_EMOJI, PALETTE, addMonths, bucketOf, bucketTotals, getAllocation, cardStatus, currentYM, dateLabel, daysUntil, emiDueIn, emiStatus,
   expensesInMonth, fmt, groupSum, incomeInMonth, lastNMonths, monthLabel, pct, shareLedger, sumBy, todayISO, tripSettlement,
 } from '../utils'
 import type { PageId } from '../App'
@@ -17,18 +17,24 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
   const [ym, setYm] = useState(currentYM())
   const isCurrent = ym === currentYM()
 
+  const alloc = getAllocation(data)
   const calc = useMemo(() => {
+    const { map } = getAllocation(data)
+    // Investments are money saved, not spent, so they stay out of "Spending"
+    const spends = (m: string) => expensesInMonth(data.expenses, m).filter(e => bucketOf(e, map) !== 'invest')
     const emiOut = (m: string) => sumBy(data.emis.filter(e => emiDueIn(e, m)), e => emiStatus(e).yourMonthly)
     const monthTotals = (m: string) => {
       const income = incomeInMonth(data.incomes, m)
-      const spend = sumBy(expensesInMonth(data.expenses, m), e => e.amount)
+      const spend = sumBy(spends(m), e => e.amount)
+      const invested = sumBy(expensesInMonth(data.expenses, m), e => e.amount) - spend
       const emi = emiOut(m)
-      return { m, label: monthLabel(m), income, spend, emi, savings: income - spend - emi }
+      return { m, label: monthLabel(m), income, spend, invested, emi, savings: income - spend - emi }
     }
     const cur = monthTotals(ym)
     const prev = monthTotals(addMonths(ym, -1))
     const trend = lastNMonths(6, ym).map(monthTotals)
-    const monthExpenses = expensesInMonth(data.expenses, ym)
+    const monthExpenses = spends(ym)
+    const split = bucketTotals(data, ym)
     const byCat = Object.entries(groupSum(monthExpenses, e => e.category, e => e.amount))
       .map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
     const byMember = data.members.map(m => ({ member: m, value: incomeInMonth(data.incomes, ym, m.id) }))
@@ -37,10 +43,10 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
     const cards = data.cards.map(c => ({ card: c, st: cardStatus(c, data) }))
     const owed = data.emis.flatMap(e => shareLedger(e).map(l => ({ ...l, emi: e })))
       .filter(l => l.pendingAmount > 0.5)
-    return { cur, prev, trend, byCat, byMember, emis, cards, owed, monthExpenses }
+    return { cur, prev, trend, byCat, byMember, emis, cards, owed, monthExpenses, split, spends }
   }, [data, ym])
 
-  const { cur, prev, trend, byCat, byMember, emis, cards, owed, monthExpenses } = calc
+  const { cur, prev, trend, byCat, byMember, emis, cards, owed, monthExpenses, split, spends } = calc
   const savingsRate = cur.income ? (cur.savings / cur.income) * 100 : 0
   const outflow = cur.spend + cur.emi
   const memberName = (id: string) => data.members.find(m => m.id === id)?.name ?? '—'
@@ -63,7 +69,7 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
     let label = 'last month'
     if (isCurrent) {
       const dayNow = todayISO().slice(8)
-      base = sumBy(expensesInMonth(data.expenses, prev.m).filter(e => e.recurring || e.date.slice(8) <= dayNow), e => e.amount)
+      base = sumBy(spends(prev.m).filter(e => e.recurring || e.date.slice(8) <= dayNow), e => e.amount)
       label = 'the same point last month'
     }
     const change = base ? ((cur.spend - base) / base) * 100 : 0
@@ -72,6 +78,13 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
         ? { tone: 'warn', icon: '📈', text: <>Spending is <b>{pct(change)} higher</b> than {label}.</> }
         : { tone: 'good', icon: '📉', text: <>Spending is <b>{pct(-change)} lower</b> than {label}. Nice!</> })
     }
+  }
+  if (cur.income > 0) {
+    const wantsPct = split.wants / cur.income * 100
+    const investPct = split.invest / cur.income * 100
+    if (wantsPct > alloc.targets.wants) insights.push({ tone: 'warn', icon: '🎉', text: <>Wants are at <b>{pct(wantsPct)}</b> of income, above your {alloc.targets.wants}% target (by {fmt(split.wants - cur.income * alloc.targets.wants / 100)}).</> })
+    if (investPct < alloc.targets.invest) insights.push({ tone: 'warn', icon: '📈', text: <>Investments are <b>{pct(investPct)}</b> of income. Invest {fmt(cur.income * alloc.targets.invest / 100 - split.invest)} more to hit your {alloc.targets.invest}% target.</> })
+    else insights.push({ tone: 'good', icon: '📈', text: <>You've invested <b>{pct(investPct)}</b> of income this month, meeting your {alloc.targets.invest}% target.</> })
   }
   const over = Object.entries(data.budgets).map(([cat, b]) => ({ cat, b, spent: sumBy(monthExpenses.filter(e => e.category === cat), e => e.amount) }))
     .filter(x => x.b > 0 && x.spent > x.b)
@@ -120,8 +133,28 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
           sub={<Delta now={cur.spend} before={prev.spend} inverse />} />
         <Stat icon="🏦" label="EMIs (your share)" value={fmt(cur.emi)} sub={`${emis.filter(x => emiDueIn(x.emi, ym)).length} active EMIs`} />
         <Stat icon="🌱" label="Net savings" value={fmt(cur.savings)} tone={cur.savings >= 0 ? 'accent' : 'bad'}
-          sub={cur.income ? `${pct(savingsRate)} savings rate` : 'Add income to see rate'} />
+          sub={cur.income ? `${pct(savingsRate)} savings rate${cur.invested ? ` · ${fmt(cur.invested, { compact: true })} invested` : ''}` : 'Add income to see rate'} />
       </div>
+
+      <Card title="⚖️ Needs · Wants · Investments" action={<button className="link" onClick={() => go('split')}>Details & settings →</button>}>
+        <div className="split-strip">
+          {BUCKETS.map(b => {
+            const actual = cur.income ? split[b.id] / cur.income * 100 : 0
+            const target = alloc.targets[b.id]
+            const bad = b.id === 'invest' ? actual < target : actual > target
+            return (
+              <div key={b.id} className="split-mini">
+                <div className="row-between"><span>{b.icon} {b.label}</span><b>{fmt(split[b.id])}</b></div>
+                <div className="split-track">
+                  <div className="split-fill" style={{ width: `${Math.min(100, actual)}%`, background: b.color }} />
+                  <span className="split-target" style={{ left: `${Math.min(100, target)}%` }} title={`Target ${target}%`} />
+                </div>
+                <div className={`small ${bad ? 'text-bad' : 'muted'}`}>{pct(actual)} of income · target {target}%</div>
+              </div>
+            )
+          })}
+        </div>
+      </Card>
 
       <div className="grid cols-3-1">
         <Card title="Income vs outflow · last 6 months">

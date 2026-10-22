@@ -10,7 +10,7 @@ const PUSH_DELAY = 1500
 function load(): AppData {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return { ...emptyData(), ...JSON.parse(raw) }
+    if (raw) return normalize(JSON.parse(raw))
   } catch { /* storage unavailable or corrupt: fall back to sample data */ }
   return sampleData()
 }
