@@ -22,7 +22,13 @@ export function SyncBadge() {
     const t = window.setInterval(() => tick(n => n + 1), 30000)
     return () => window.clearInterval(t)
   }, [])
-  if (!sheet) return null
+  if (!sheet) {
+    return (
+      <a href="#/settings" className="sync-badge sync-off" title="This device isn't connected to Google Sheets, so its data stays on this device only">
+        <span className="sync-dot" /><span>Not synced</span>
+      </a>
+    )
+  }
   const label = {
     off: '', loading: 'Loading from sheet…', saving: 'Saving…', error: 'Sync error', saved: `Synced ${ago(sync.at)}`,
   }[sync.state]
@@ -34,8 +40,54 @@ export function SyncBadge() {
   )
 }
 
+const CONNECT_HASH = /^#\/connect\?(.*)$/
+
+/** Link that connects another device in one tap. The secret rides in the #fragment, which browsers never send to a server. */
+export function deviceLink(url: string, token: string) {
+  const q = new URLSearchParams({ u: url, k: token })
+  return `${window.location.origin}${window.location.pathname}#/connect?${q}`
+}
+
+/** True when this device holds nothing worth keeping, so sheet data can replace it without asking. */
+function isThrowaway(d: AppData) {
+  return d.isSample || (!d.expenses.length && !d.incomes.length && !d.cards.length && !d.emis.length && !d.trips.length)
+}
+
+function DeviceLink({ url, token }: { url: string; token: string }) {
+  const [open, setOpen] = useState(false)
+  const [qr, setQr] = useState('')
+  const [copied, setCopied] = useState(false)
+  const link = deviceLink(url, token)
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    import('qrcode').then(QR => QR.toDataURL(link, { margin: 1, width: 240 })).then(d => { if (live) setQr(d) }).catch(() => setQr(''))
+    return () => { live = false }
+  }, [open, link])
+  if (!open) return <button className="btn" onClick={() => setOpen(true)}>📱 Connect another device</button>
+  return (
+    <div className="device-link span-all">
+      {qr && <img src={qr} alt="QR code that connects another device to this Google Sheet" width={180} height={180} />}
+      <div className="grow">
+        <b>Connect a phone or another laptop</b>
+        <ol className="steps mt">
+          <li>Scan this code with the phone camera, or send the link to that device.</li>
+          <li>It opens the app and connects to this sheet automatically.</li>
+        </ol>
+        <div className="row gap wrap mt">
+          <button className="btn btn-sm" onClick={async () => {
+            try { await navigator.clipboard.writeText(link); setCopied(true); window.setTimeout(() => setCopied(false), 2000) } catch { prompt('Copy this link', link) }
+          }}>{copied ? '✓ Link copied' : '🔗 Copy link'}</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => setOpen(false)}>Hide</button>
+        </div>
+        <p className="muted small mt">🔒 The link contains your secret key. Only share it with family, for example in a private chat.</p>
+      </div>
+    </div>
+  )
+}
+
 export function SheetSettings() {
-  const { sheet, sync, connectSheet, disconnectSheet, reloadFromSheet, saveToSheetNow } = useStore()
+  const { data, sheet, sync, connectSheet, disconnectSheet, reloadFromSheet, saveToSheetNow } = useStore()
   const [url, setUrl] = useState(sheet?.url ?? '')
   const [token, setToken] = useState(sheet?.token ?? '')
   const [busy, setBusy] = useState(false)
@@ -53,15 +105,16 @@ export function SheetSettings() {
     }
   }
 
-  const test = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const test = async (u = url, k = token) => {
     setError(''); setFound(null)
-    if (!isValidScriptUrl(url)) return setError('The URL should look like https://script.google.com/macros/s/…/exec')
+    if (!isValidScriptUrl(u)) return setError('The URL should look like https://script.google.com/macros/s/…/exec')
     setBusy(true)
     try {
-      const remote = await pullFromSheet({ url: url.trim(), token })
-      if (remote && (remote.members?.length || remote.expenses?.length || remote.incomes?.length)) setFound(remote)
-      else await connectSheet({ url, token }, 'push')
+      const remote = await pullFromSheet({ url: u.trim(), token: k })
+      const hasData = remote && (remote.members?.length || remote.expenses?.length || remote.incomes?.length)
+      if (!hasData) await connectSheet({ url: u, token: k }, 'push')
+      else if (isThrowaway(data)) await connectSheet({ url: u, token: k }, 'pull') // nothing here to lose
+      else setFound(remote)
     } catch (err) {
       setError((err as Error).message === 'Failed to fetch'
         ? 'Could not reach the script. Check the URL and that access is set to "Anyone".'
@@ -70,6 +123,19 @@ export function SheetSettings() {
       setBusy(false)
     }
   }
+
+  // Opened from a "Connect another device" link
+  useEffect(() => {
+    const m = window.location.hash.match(CONNECT_HASH)
+    if (!m) return
+    const q = new URLSearchParams(m[1])
+    const u = q.get('u') ?? '', k = q.get('k') ?? ''
+    history.replaceState(null, '', '#/settings') // keep the secret out of the address bar and history
+    if (sheet || !u || !k) return
+    setUrl(u); setToken(k)
+    test(u, k)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const choose = async (mode: 'pull' | 'push') => {
     if (mode === 'push' && !confirm('Overwrite the data in the Google Sheet with the data on this device?')) return
@@ -93,10 +159,11 @@ export function SheetSettings() {
             </div>
           </div>
         </div>
-        <p className="muted small mt">Anyone in the family can open this app on their own device and connect with the same URL and secret key. Everyone shares one sheet, and the most recent save wins.</p>
+        <p className="muted small mt">Each device connects separately. Use <b>Connect another device</b> to link a phone in one scan. Everyone shares one sheet, and the most recent save wins.</p>
         <div className="row gap wrap mt">
           <button className="btn btn-ghost" onClick={reloadFromSheet}>⟳ Reload from sheet</button>
           <button className="btn btn-ghost" onClick={saveToSheetNow}>⬆ Save now</button>
+          <DeviceLink url={sheet.url} token={sheet.token} />
           <button className="btn btn-danger" onClick={() => confirm('Stop syncing on this device? Your data stays in the sheet and on this device.') && disconnectSheet()}>Disconnect</button>
         </div>
       </Card>
@@ -115,7 +182,7 @@ export function SheetSettings() {
         <li>Click <b>Deploy → New deployment</b>, choose type <b>Web app</b>, and set <i>Execute as</i>: <b>Me</b> and <i>Who has access</i>: <b>Anyone</b>. Click Deploy, allow access, then copy the <b>Web app URL</b>.</li>
         <li>Paste the URL and your secret below.</li>
       </ol>
-      <form className="form-grid mt" onSubmit={test}>
+      <form className="form-grid mt" onSubmit={e => { e.preventDefault(); test() }}>
         <Field label="Web app URL" span><input required value={url} placeholder="https://script.google.com/macros/s/…/exec" onChange={e => setUrl(e.target.value)} /></Field>
         <Field label="Secret key" span hint="The SECRET you set in the script"><input required type="password" value={token} onChange={e => setToken(e.target.value)} /></Field>
         {error && <div className="span-2 alert">{error}</div>}
