@@ -32,6 +32,15 @@ export interface Expense {
   cardId?: ID
   billed?: boolean // only meaningful for card spends; false = unbilled
   recurring?: boolean
+  bucket?: Bucket // overrides the category's default bucket
+}
+
+export type Bucket = 'needs' | 'wants' | 'invest'
+
+export interface Allocation {
+  targets: Record<Bucket, number> // % of income, should add up to 100
+  categoryBuckets: Record<string, Bucket> // overrides of DEFAULT_BUCKETS
+  emiBucket: Bucket
 }
 
 export interface CreditCard {
@@ -106,6 +115,8 @@ export interface Goal {
 export interface Settings {
   currency: string
   theme: 'system' | 'light' | 'dark'
+  // Lives under settings so it syncs to Google Sheets with no change to the Apps Script
+  allocation?: Allocation
 }
 
 export interface AppData {

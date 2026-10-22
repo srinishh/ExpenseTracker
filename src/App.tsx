@@ -8,12 +8,14 @@ import CreditCards from './pages/CreditCards'
 import Trips from './pages/Trips'
 import Planning from './pages/Planning'
 import Settings from './pages/Settings'
+import Split from './pages/Split'
 import { SyncBadge } from './components/SheetSync'
 
 const PAGES = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'income', label: 'Family Income', icon: '👨‍👩‍👧' },
   { id: 'expenses', label: 'Expenses', icon: '🧾' },
+  { id: 'split', label: 'Needs & Wants', icon: '⚖️' },
   { id: 'cards', label: 'Credit Cards', icon: '💳' },
   { id: 'trips', label: 'Trip Planner', icon: '✈️' },
   { id: 'planning', label: 'Budgets & Goals', icon: '🎯' },
@@ -80,6 +82,7 @@ export default function App() {
         {page === 'dashboard' && <Dashboard go={go} />}
         {page === 'income' && <FamilyIncome />}
         {page === 'expenses' && <Expenses />}
+        {page === 'split' && <Split />}
         {page === 'cards' && <CreditCards />}
         {page === 'trips' && <Trips />}
         {page === 'planning' && <Planning />}

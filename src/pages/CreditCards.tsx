@@ -163,7 +163,7 @@ function CardForm({ card, onClose, onSaved }: { card: CreditCard; onClose: () =>
         <Field label="Statement day" hint="Day of month the bill is generated"><NumInput min={1} max={31} required value={f.billingDay} onChange={v => setF({ ...f, billingDay: v })} /></Field>
         <Field label="Due day" hint="Day of month payment is due"><NumInput min={1} max={31} required value={f.dueDay} onChange={v => setF({ ...f, dueDay: v })} /></Field>
         <Field label="Current statement outstanding" span hint="Amount already billed and still to be paid"><NumInput min={0} value={f.billedOutstanding} placeholder="0" onChange={v => setF({ ...f, billedOutstanding: v })} /></Field>
-        <Field label="Colour" span>
+        <Field group label="Colour" span>
           <div className="swatches">{CARD_COLORS.map(c => <button type="button" key={c} className={`swatch ${f.color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => setF({ ...f, color: c })} aria-label={c} />)}</div>
         </Field>
         <div className="form-actions span-2">

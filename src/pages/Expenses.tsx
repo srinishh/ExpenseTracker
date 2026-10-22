@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { Card, Empty, Field, Modal, NumInput, PageHeader, Stat } from '../components/ui'
-import type { Expense, PaymentMethod } from '../types'
+import type { Bucket, Expense, PaymentMethod } from '../types'
+import { BucketPicker } from './Split'
 import {
-  CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
+  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, getAllocation, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
 } from '../utils'
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', bank: '🏦 Bank' }
@@ -12,11 +13,15 @@ export default function Expenses() {
   const { data, update } = useStore()
   const [ym, setYm] = useState(currentYM())
   const [cat, setCat] = useState('')
+  const [bucket, setBucket] = useState<Bucket | ''>('')
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Expense | null>(null)
 
+  const { map } = getAllocation(data)
   const all = expensesInMonth(data.expenses, ym)
+  const bucketTotal = (b: Bucket) => sumBy(all.filter(e => bucketOf(e, map) === b), e => e.amount)
   const list = all
+    .filter(e => !bucket || bucketOf(e, map) === bucket)
     .filter(e => !cat || e.category === cat)
     .filter(e => !q || e.description.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (b.recurring ? 0 : 1) - (a.recurring ? 0 : 1) || b.date.localeCompare(a.date))
@@ -39,13 +44,21 @@ export default function Expenses() {
         </>} />
 
       <div className="grid stats-4">
-        <Stat icon="🧾" label="Total spent" value={fmt(total)} sub={`${all.length} transactions`} />
+        <Stat icon="🧾" label="Total outflow" value={fmt(total)} sub={`${all.length} transactions · ${fmt(bucketTotal('invest'), { compact: true })} invested`} />
         <Stat icon="📅" label="Daily average" value={fmt(total / Math.max(1, days))} />
         <Stat icon="💳" label="On cards" value={fmt(byMethod.card ?? 0)} sub={`${Math.round(((byMethod.card ?? 0) / (total || 1)) * 100)}% of spend`} />
         <Stat icon="🔁" label="Recurring" value={fmt(sumBy(all.filter(e => e.recurring), e => e.amount))} sub="fixed monthly costs" />
       </div>
 
       <Card>
+        <div className="seg bucket-filter mb">
+          <button className={!bucket ? 'on' : ''} onClick={() => setBucket('')}>All · {fmt(total, { compact: true })}</button>
+          {BUCKETS.map(b => (
+            <button key={b.id} className={bucket === b.id ? `on b-${b.id}` : ''} onClick={() => setBucket(b.id)}>
+              {b.icon} {b.label} · {fmt(bucketTotal(b.id), { compact: true })}
+            </button>
+          ))}
+        </div>
         <div className="filters">
           <input placeholder="🔍 Search expenses…" value={q} onChange={e => setQ(e.target.value)} />
           <select value={cat} onChange={e => setCat(e.target.value)}>
@@ -59,7 +72,7 @@ export default function Expenses() {
               <li key={e.id} className="tx" onClick={() => setEditing(e)}>
                 <span className="tx-icon">{CATEGORY_EMOJI[e.category] ?? '📦'}</span>
                 <div className="grow">
-                  <div>{e.description}{e.recurring && <span className="pill">monthly</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}</div>
+                  <div>{e.description}<span className={`pill pill-${bucketOf(e, map)}`}>{BUCKET_LABEL[bucketOf(e, map)]}</span>{e.recurring && <span className="pill">monthly</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}</div>
                   <div className="muted small">
                     {e.recurring ? 'Every month' : dateLabel(e.date)} · {e.category} · {METHOD_LABEL[e.method]}{e.cardId && ` ${cardName(e.cardId)}`}
                     {memberName(e.memberId) && ` · for ${memberName(e.memberId)}`}
@@ -87,9 +100,11 @@ export function ExpenseForm({ expense, onClose, onDelete, title }: {
 }) {
   const { data, update } = useStore()
   const [f, setF] = useState(expense)
+  const autoBucket = getAllocation(data).map[f.category] ?? 'wants'
   const save = (e: React.FormEvent) => {
     e.preventDefault()
     const clean: Expense = { ...f }
+    if (!clean.bucket) delete clean.bucket
     if (clean.method !== 'card') { delete clean.cardId; delete clean.billed }
     else { clean.cardId = clean.cardId ?? data.cards[0]?.id; clean.billed = clean.billed ?? false }
     update(d => {
@@ -129,6 +144,12 @@ export function ExpenseForm({ expense, onClose, onDelete, title }: {
             ) : <span className="muted small">Add a card in Credit Cards first</span>}
           </Field>
         )}
+        <Field group label="Bucket" span hint={f.bucket ? 'Overridden for this expense only' : `Auto: follows the ${f.category} category`}>
+          <div className="row gap wrap">
+            <BucketPicker value={f.bucket ?? autoBucket} onChange={b => setF({ ...f, bucket: b === autoBucket ? undefined : b })} />
+            {f.bucket && <button type="button" className="link" onClick={() => setF({ ...f, bucket: undefined })}>Use category default</button>}
+          </div>
+        </Field>
         <label className="check span-2">
           <input type="checkbox" checked={!!f.recurring} onChange={e => setF({ ...f, recurring: e.target.checked })} />
           Repeats every month (rent, subscriptions, insurance…)

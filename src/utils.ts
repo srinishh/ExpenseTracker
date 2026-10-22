@@ -1,10 +1,50 @@
-import type { AppData, CreditCard, Emi, Expense, Income } from './types'
+import type { Allocation, AppData, Bucket, CreditCard, Emi, Expense, Income } from './types'
 
 export const EXPENSE_CATEGORIES = [
   'Food & Dining', 'Groceries', 'Rent & Housing', 'Utilities', 'Transport', 'Fuel',
   'Shopping', 'Entertainment', 'Health', 'Education', 'Travel', 'Insurance',
   'Subscriptions', 'Personal Care', 'Gifts & Donations', 'Other',
+  'SIP & Mutual Funds', 'Stocks', 'Fixed Deposits', 'PPF / NPS / EPF', 'Gold', 'Other Investments',
 ]
+
+export const BUCKETS: { id: Bucket; label: string; icon: string; color: string; hint: string }[] = [
+  { id: 'needs', label: 'Needs', icon: '🏠', color: 'var(--c-needs)', hint: 'Essentials you must pay: rent, groceries, bills, EMIs' },
+  { id: 'wants', label: 'Wants', icon: '🎉', color: 'var(--c-wants)', hint: 'Nice-to-haves: dining out, shopping, entertainment' },
+  { id: 'invest', label: 'Investments', icon: '📈', color: 'var(--c-invest)', hint: 'Money put to work: SIPs, stocks, FDs, PPF' },
+]
+
+export const BUCKET_LABEL: Record<Bucket, string> = { needs: 'Needs', wants: 'Wants', invest: 'Investments' }
+
+export const DEFAULT_BUCKETS: Record<string, Bucket> = {
+  'Food & Dining': 'wants', Groceries: 'needs', 'Rent & Housing': 'needs', Utilities: 'needs', Transport: 'needs',
+  Fuel: 'needs', Shopping: 'wants', Entertainment: 'wants', Health: 'needs', Education: 'needs', Travel: 'wants',
+  Insurance: 'needs', Subscriptions: 'wants', 'Personal Care': 'wants', 'Gifts & Donations': 'wants', Other: 'wants',
+  'SIP & Mutual Funds': 'invest', Stocks: 'invest', 'Fixed Deposits': 'invest', 'PPF / NPS / EPF': 'invest',
+  Gold: 'invest', 'Other Investments': 'invest',
+}
+
+export const SPLIT_PRESETS: { label: string; targets: Record<Bucket, number> }[] = [
+  { label: '50 / 30 / 20 (classic)', targets: { needs: 50, wants: 30, invest: 20 } },
+  { label: '60 / 20 / 20', targets: { needs: 60, wants: 20, invest: 20 } },
+  { label: '70 / 20 / 10', targets: { needs: 70, wants: 20, invest: 10 } },
+  { label: '40 / 30 / 30 (aggressive saver)', targets: { needs: 40, wants: 30, invest: 30 } },
+]
+
+export function getAllocation(data: AppData): Allocation & { map: Record<string, Bucket> } {
+  const a = data.settings.allocation
+  const targets = a?.targets ?? SPLIT_PRESETS[0].targets
+  const categoryBuckets = a?.categoryBuckets ?? {}
+  return {
+    targets,
+    categoryBuckets,
+    emiBucket: a?.emiBucket ?? 'needs',
+    map: { ...DEFAULT_BUCKETS, ...categoryBuckets },
+  }
+}
+
+export function bucketOf(e: Pick<Expense, 'category' | 'bucket'>, map: Record<string, Bucket>): Bucket {
+  return e.bucket ?? map[e.category] ?? 'wants'
+}
 
 export const INCOME_CATEGORIES = [
   'Salary', 'Business', 'Freelance', 'Rental', 'Interest & Dividends', 'Bonus', 'Pension', 'Other',
@@ -21,6 +61,7 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   Insurance: '🛡️', Subscriptions: '📺', 'Personal Care': '💇', 'Gifts & Donations': '🎁', Other: '📦',
   Flights: '✈️', 'Train / Bus': '🚆', Stay: '🏨', Food: '🍜', 'Local Transport': '🛺',
   Activities: '🎢', 'Visa & Docs': '🛂', Misc: '🧳',
+  'SIP & Mutual Funds': '📊', Stocks: '📈', 'Fixed Deposits': '🏦', 'PPF / NPS / EPF': '🧓', Gold: '🪙', 'Other Investments': '💼',
 }
 
 export const PALETTE = [
@@ -258,4 +299,16 @@ export function tripSettlement(travelers: string[], items: { actual: number; pai
     if (creditors[j].amt < 0.5) j++
   }
   return { total, share, balances, transfers }
+}
+
+// ---------- Needs / wants / investments ----------
+
+/** Month outflow per bucket; your share of EMIs goes to the bucket chosen in the allocation settings. */
+export function bucketTotals(data: AppData, ym: string) {
+  const { map, emiBucket } = getAllocation(data)
+  const totals: Record<Bucket, number> = { needs: 0, wants: 0, invest: 0 }
+  for (const e of expensesInMonth(data.expenses, ym)) totals[bucketOf(e, map)] += e.amount
+  const emi = sumBy(data.emis.filter(e => emiDueIn(e, ym)), e => emiStatus(e).yourMonthly)
+  totals[emiBucket] += emi
+  return { ...totals, emi }
 }
