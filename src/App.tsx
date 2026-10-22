@@ -8,6 +8,7 @@ import CreditCards from './pages/CreditCards'
 import Trips from './pages/Trips'
 import Planning from './pages/Planning'
 import Settings from './pages/Settings'
+import { SyncBadge } from './components/SheetSync'
 
 const PAGES = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -66,6 +67,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <SyncBadge />
       </aside>
 
       <main className="main">

@@ -338,3 +338,27 @@ tr.upcoming td { background: var(--warn-soft); }
   .filters { flex-direction: column; }
   .month-picker span { min-width: 100px; }
 }
+
+/* ---------- google sheets sync ---------- */
+.span-all { grid-column: 1 / -1; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.sync-saved .sync-dot { background: var(--good); }
+.sync-saving .sync-dot, .sync-loading .sync-dot { background: var(--warn); animation: pulse 1s infinite alternate; }
+.sync-error .sync-dot { background: var(--bad); }
+@keyframes pulse { to { opacity: 0.3; } }
+.sync-badge {
+  margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+  text-decoration: none; padding: 8px 12px; border-radius: 10px; background: var(--surface-2);
+}
+.sync-badge.sync-error { color: var(--bad); background: var(--bad-soft); }
+.sync-panel { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.sync-panel.sync-error { background: var(--bad-soft); }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.steps a { color: var(--accent); }
+code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 5px; font-size: 12px; }
+.alert { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.choice { background: var(--accent-soft); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 860px) {
+  .sync-badge { position: fixed; top: 10px; right: 10px; z-index: 45; margin: 0; padding: 4px 8px; box-shadow: var(--shadow); }
+  .sync-badge span:last-child { display: none; }
+}

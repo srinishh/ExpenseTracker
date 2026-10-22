@@ -4,6 +4,7 @@ import { emptyData, sampleData } from '../sample'
 import { Card, Field, PageHeader } from '../components/ui'
 import { CURRENCIES, todayISO } from '../utils'
 import type { AppData } from '../types'
+import { SheetSettings } from '../components/SheetSync'
 
 export default function Settings() {
   const { data, update, replace } = useStore()
@@ -37,6 +38,7 @@ export default function Settings() {
     <div className="page">
       <PageHeader title="Settings" subtitle="Preferences, backups and data" />
       <div className="grid cols-2">
+        <SheetSettings />
         <Card title="Preferences">
           <div className="form-grid">
             <Field label="Currency">
@@ -55,7 +57,7 @@ export default function Settings() {
         </Card>
 
         <Card title="Backup & export">
-          <p className="muted small mb">Your data lives only in this browser. Download a backup regularly, or to move to another device.</p>
+          <p className="muted small mb">Without Google Sheets sync, your data lives only in this browser. Download a backup regularly, or to move it to another device.</p>
           <div className="row gap wrap">
             <button className="btn" onClick={exportJSON}>⬇ Download backup (JSON)</button>
             <button className="btn btn-ghost" onClick={exportCSV}>⬇ Transactions CSV</button>
@@ -76,7 +78,7 @@ export default function Settings() {
             {data.members.length} members · {data.incomes.length} income entries · {data.expenses.length} expenses ·{' '}
             {data.cards.length} cards · {data.emis.length} EMIs · {data.trips.length} trips
           </p>
-          <p className="muted small">Everything is stored locally with no account and no server — private by design.</p>
+          <p className="muted small">Data is stored in this browser, and in your own Google Sheet if you connect one. There's no third-party server.</p>
         </Card>
       </div>
     </div>

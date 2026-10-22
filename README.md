@@ -18,6 +18,19 @@ A private, browser-based expense tracker for the whole family. There's no sign-u
 
 The app opens with sample data so you can explore it. Click **Start fresh** to clear it and begin with your own numbers.
 
+## Google Sheets storage (optional)
+
+Connect a Google Sheet you own and every change saves to it automatically. Everyone in the family can then use the same data on their own phone or laptop. Each kind of data gets its own readable tab (`members`, `incomes`, `expenses`, `cards`, `emis`, `trips`, `goals`, `budgets`).
+
+1. Create a Google Sheet (open [sheets.new](https://sheets.new)), then go to **Extensions → Apps Script**.
+2. Replace the sample code with [`google-sheets/Code.gs`](google-sheets/Code.gs). The app's **Settings → Copy sync script** button copies it for you. Change `SECRET` to a long password of your own.
+3. Click **Deploy → New deployment → Web app**, with *Execute as*: **Me** and *Who has access*: **Anyone**. Deploy, allow access, and copy the `/exec` URL.
+4. In the app, go to **Settings → Google Sheets**, paste the URL and the secret, and click **Connect sheet**.
+
+How sync works: the app loads from the sheet when it opens and whenever you come back to the tab, and saves about 1.5 s after each change. The browser keeps a copy, so the app still works offline. If two people edit at the same moment, the last save wins. Anyone with both the URL and the secret can read and edit the sheet, so keep them private.
+
+If you change `Code.gs` later, use **Deploy → Manage deployments → Edit → New version** so the URL stays the same.
+
 ## Run locally
 
 ```bash
