@@ -434,3 +434,7 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 @keyframes slide-up { from { transform: translateY(100%); } }
 .device-link { flex-basis: 100%; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 14px; border-radius: 12px; background: var(--accent-soft); }
 .device-link img { border-radius: 10px; background: #fff; padding: 6px; }
+.connect-option { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.connect-option summary { cursor: pointer; }
+.sync-panel.sync-off { background: var(--warn-soft); }
+.sync-panel.sync-off .sync-dot { background: var(--warn); }

@@ -93,6 +93,7 @@ export function SheetSettings() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [found, setFound] = useState<AppData | null>(null)
+  const [pasted, setPasted] = useState('')
   const [copied, setCopied] = useState(false)
 
   const copyScript = async () => {
@@ -137,6 +138,15 @@ export function SheetSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const useLink = () => {
+    const m = pasted.trim().match(/#\/connect\?(.*)$/)
+    const q = new URLSearchParams(m?.[1] ?? '')
+    const u = q.get('u') ?? '', k = q.get('k') ?? ''
+    if (!u || !k) return setError('That doesn\'t look like a connect link. Copy it again from Settings → Connect another device on the other device.')
+    setUrl(u); setToken(k); setPasted('')
+    test(u, k)
+  }
+
   const choose = async (mode: 'pull' | 'push') => {
     if (mode === 'push' && !confirm('Overwrite the data in the Google Sheet with the data on this device?')) return
     setBusy(true)
@@ -159,11 +169,13 @@ export function SheetSettings() {
             </div>
           </div>
         </div>
-        <p className="muted small mt">Each device connects separately. Use <b>Connect another device</b> to link a phone in one scan. Everyone shares one sheet, and the most recent save wins.</p>
+        <p className="muted small mt">Each device connects separately. To add your phone or a family member's device, tap <b>Connect another device</b> and scan the code. Everyone shares one sheet, and the most recent save wins.</p>
+        <div className="row gap wrap mt">
+          <DeviceLink url={sheet.url} token={sheet.token} />
+        </div>
         <div className="row gap wrap mt">
           <button className="btn btn-ghost" onClick={reloadFromSheet}>⟳ Reload from sheet</button>
           <button className="btn btn-ghost" onClick={saveToSheetNow}>⬆ Save now</button>
-          <DeviceLink url={sheet.url} token={sheet.token} />
           <button className="btn btn-danger" onClick={() => confirm('Stop syncing on this device? Your data stays in the sheet and on this device.') && disconnectSheet()}>Disconnect</button>
         </div>
       </Card>
@@ -171,37 +183,63 @@ export function SheetSettings() {
   }
 
   return (
-    <Card title="☁️ Store data in Google Sheets" className="span-all">
-      <p className="muted mb">Save everything to a Google Sheet you own. It works as a live backup and lets the whole family share the same data across phones and laptops. Setup takes about 3 minutes:</p>
-      <ol className="steps">
-        <li>Create a new <a href="https://sheets.new" target="_blank" rel="noreferrer">Google Sheet</a>, then open <b>Extensions → Apps Script</b>.</li>
-        <li>
-          Delete the sample code, paste in the sync script, and change <code>SECRET</code> to a long password of your own.
-          <div className="mt"><button type="button" className="btn btn-sm" onClick={copyScript}>{copied ? '✓ Copied' : '📋 Copy sync script'}</button></div>
-        </li>
-        <li>Click <b>Deploy → New deployment</b>, choose type <b>Web app</b>, and set <i>Execute as</i>: <b>Me</b> and <i>Who has access</i>: <b>Anyone</b>. Click Deploy, allow access, then copy the <b>Web app URL</b>.</li>
-        <li>Paste the URL and your secret below.</li>
-      </ol>
-      <form className="form-grid mt" onSubmit={e => { e.preventDefault(); test() }}>
-        <Field label="Web app URL" span><input required value={url} placeholder="https://script.google.com/macros/s/…/exec" onChange={e => setUrl(e.target.value)} /></Field>
-        <Field label="Secret key" span hint="The SECRET you set in the script"><input required type="password" value={token} onChange={e => setToken(e.target.value)} /></Field>
-        {error && <div className="span-2 alert">{error}</div>}
-        {found ? (
-          <div className="span-2 choice">
-            <b>This sheet already has data</b>
-            <p className="muted small">{found.members.length} members · {found.incomes.length} incomes · {found.expenses.length} expenses · {found.emis.length} EMIs · {found.trips.length} trips</p>
-            <div className="row gap wrap">
-              <button type="button" className="btn" disabled={busy} onClick={() => choose('pull')}>⬇ Use sheet data on this device</button>
-              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => choose('push')}>⬆ Replace sheet with this device's data</button>
+    <Card title="☁️ Google Sheets sync" className="span-all">
+      <div className="sync-panel sync-off">
+        <span className="sync-dot" />
+        <div className="grow">
+          <b>This device isn't connected</b>
+          <div className="muted small">Its data stays on this device only. Connect it to see the same data as your other devices.</div>
+        </div>
+      </div>
+
+      <section className="connect-option">
+        <b>📱 Connected on another device already?</b>
+        <p className="muted small">On that device, open <b>Settings → Connect another device</b> and scan the QR code with this phone's camera. Or copy the link it shows and paste it here:</p>
+        <form className="row gap" onSubmit={e => { e.preventDefault(); useLink() }}>
+          <input className="grow" value={pasted} placeholder="Paste the connect link" onChange={e => setPasted(e.target.value)} aria-label="Connect link" />
+          <button className="btn" disabled={busy || !pasted.trim()}>Connect</button>
+        </form>
+      </section>
+
+      <section className="connect-option">
+        <b>🔑 Have the web app URL and secret key?</b>
+        <p className="muted small">Enter the same URL and <code>SECRET</code> you used when setting up the sheet.</p>
+        <form className="form-grid" onSubmit={e => { e.preventDefault(); test() }}>
+          <Field label="Web app URL" span><input required value={url} placeholder="https://script.google.com/macros/s/…/exec" onChange={e => setUrl(e.target.value)} /></Field>
+          <Field label="Secret key" span hint="The SECRET you set in the script"><input required type="password" value={token} onChange={e => setToken(e.target.value)} /></Field>
+          {!found && (
+            <div className="form-actions span-2">
+              <span className="grow" />
+              <button className="btn" disabled={busy}>{busy ? 'Connecting…' : 'Connect sheet'}</button>
             </div>
+          )}
+        </form>
+      </section>
+
+      {error && <div className="alert mt">{error}</div>}
+      {found && (
+        <div className="choice mt">
+          <b>This sheet already has data</b>
+          <p className="muted small">{found.members.length} members · {found.incomes.length} incomes · {found.expenses.length} expenses · {found.emis.length} EMIs · {found.trips.length} trips</p>
+          <div className="row gap wrap">
+            <button type="button" className="btn" disabled={busy} onClick={() => choose('pull')}>⬇ Use sheet data on this device</button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => choose('push')}>⬆ Replace sheet with this device's data</button>
           </div>
-        ) : (
-          <div className="form-actions span-2">
-            <span className="grow" />
-            <button className="btn" disabled={busy}>{busy ? 'Connecting…' : 'Connect sheet'}</button>
-          </div>
-        )}
-      </form>
+        </div>
+      )}
+
+      <details className="connect-option">
+        <summary><b>🆕 First time? Set up a Google Sheet</b> <span className="muted small">(about 3 minutes)</span></summary>
+        <ol className="steps mt">
+          <li>Create a new <a href="https://sheets.new" target="_blank" rel="noreferrer">Google Sheet</a>, then open <b>Extensions → Apps Script</b>.</li>
+          <li>
+            Delete the sample code, paste in the sync script, and change <code>SECRET</code> to a long password of your own.
+            <div className="mt"><button type="button" className="btn btn-sm" onClick={copyScript}>{copied ? '✓ Copied' : '📋 Copy sync script'}</button></div>
+          </li>
+          <li>Click <b>Deploy → New deployment</b>, choose type <b>Web app</b>, and set <i>Execute as</i>: <b>Me</b> and <i>Who has access</i>: <b>Anyone</b>. Click Deploy, allow access, then copy the <b>Web app URL</b>.</li>
+          <li>Enter the URL and your secret in the section above.</li>
+        </ol>
+      </details>
       <p className="muted small mt">🔒 Your data goes straight from your browser to your own Google account. Keep the URL and secret private, because anyone who has both can read and edit the sheet.</p>
     </Card>
   )
