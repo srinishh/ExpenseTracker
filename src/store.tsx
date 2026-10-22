@@ -5,7 +5,17 @@ import { setCurrency } from './utils'
 import { beaconToSheet, loadSheetConfig, pullFromSheet, pushToSheet, saveSheetConfig, type SheetConfig } from './sheets'
 
 const KEY = 'family-finance:v1'
+const DIRTY_KEY = 'family-finance:unsynced'
 const PUSH_DELAY = 1500
+const RETRY_DELAY = 15000
+const BEACON_LIMIT = 60000 // sendBeacon silently drops payloads over ~64 KB
+
+function readDirty() {
+  try { return localStorage.getItem(DIRTY_KEY) === '1' } catch { return false }
+}
+
+// structuredClone is missing on older phones (iOS < 15.4); the data is plain JSON anyway
+const clone = <T,>(v: T): T => typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v))
 
 function load(): AppData {
   try {
@@ -56,6 +66,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const remoteReady = useRef(false)
   const skipPush = useRef(false)
   const pushTimer = useRef<number | undefined>(undefined)
+  // True while this device has changes the sheet hasn't confirmed. Persisted so a reload or crash
+  // can't let an older sheet copy overwrite them: while dirty we always push before we pull.
+  const dirty = useRef(readDirty())
+  const setDirty = useCallback((v: boolean) => {
+    dirty.current = v
+    try { if (v) localStorage.setItem(DIRTY_KEY, '1'); else localStorage.removeItem(DIRTY_KEY) } catch { /* storage unavailable */ }
+  }, [])
 
   const applyRemote = useCallback((remote: AppData) => {
     skipPush.current = true
@@ -68,22 +85,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     window.clearTimeout(pushTimer.current)
     pushTimer.current = undefined
     setSync({ state: 'saving' })
+    const snapshot = dataRef.current
     try {
-      await pushToSheet(cfg, dataRef.current)
+      await pushToSheet(cfg, snapshot)
+      remoteReady.current = true
+      // Edits made while the request was in flight have their own save scheduled
+      if (dataRef.current === snapshot) setDirty(false)
       setSync({ state: 'saved', at: Date.now() })
     } catch (e) {
-      setSync({ state: 'error', message: (e as Error).message })
+      setSync({ state: 'error', message: `${(e as Error).message}. Your changes are kept on this device and will retry.` })
+      if (pushTimer.current === undefined) pushTimer.current = window.setTimeout(() => pushRef.current(), RETRY_DELAY)
     }
-  }, [])
+  }, [setDirty])
+  const pushRef = useRef(push)
+  pushRef.current = push
 
-  const pull = useCallback(async () => {
+  /** Loads the sheet, unless this device has unsaved changes: then those are saved first and win. */
+  const pull = useCallback(async (force = false) => {
     const cfg = sheetRef.current
     if (!cfg) return
+    if (dirty.current && !force) return push()
     setSync({ state: 'loading' })
     try {
       const remote = await pullFromSheet(cfg)
       remoteReady.current = true
+      if (dirty.current && !force) return push() // edited while loading
       if (remote) {
+        setDirty(false)
         applyRemote(remote)
         setSync({ state: 'saved', at: Date.now() })
       } else {
@@ -92,7 +120,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setSync({ state: 'error', message: (e as Error).message })
     }
-  }, [applyRemote, push])
+  }, [applyRemote, push, setDirty])
 
   // Initial load from the sheet
   useEffect(() => {
@@ -103,32 +131,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(data)) } catch { /* ignore quota / private mode */ }
     if (skipPush.current) { skipPush.current = false; return }
-    if (!sheetRef.current || !remoteReady.current) return
+    if (!sheetRef.current) return
+    setDirty(true)
+    if (!remoteReady.current) return // the initial load will push this instead of overwriting it
     window.clearTimeout(pushTimer.current)
     setSync(s => ({ ...s, state: 'saving' }))
     pushTimer.current = window.setTimeout(push, PUSH_DELAY)
-  }, [data, push])
+  }, [data, push, setDirty])
 
   // Flush pending saves on close; pick up other family members' edits when returning to the tab
   useEffect(() => {
+    // Best effort only: the change stays marked dirty, so coming back pushes it again rather than pulling over it
     const onHide = () => {
-      if (pushTimer.current !== undefined && sheetRef.current) {
-        window.clearTimeout(pushTimer.current)
-        pushTimer.current = undefined
-        beaconToSheet(sheetRef.current, dataRef.current)
-      }
+      if (!dirty.current || !sheetRef.current) return
+      const payload = JSON.stringify(dataRef.current)
+      if (payload.length < BEACON_LIMIT) beaconToSheet(sheetRef.current, dataRef.current)
     }
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && sheetRef.current && remoteReady.current && pushTimer.current === undefined) pull()
-      else if (document.visibilityState === 'hidden') onHide()
+      if (document.visibilityState === 'hidden') return onHide()
+      if (sheetRef.current && remoteReady.current && pushTimer.current === undefined) pull()
     }
+    const onOnline = () => { if (dirty.current && sheetRef.current) push() }
     window.addEventListener('pagehide', onHide)
+    window.addEventListener('online', onOnline)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.removeEventListener('pagehide', onHide)
+      window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [pull])
+  }, [pull, push])
 
   useEffect(() => {
     const root = document.documentElement
@@ -138,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((fn: (draft: AppData) => void) => {
     setData(prev => {
-      const next = structuredClone(prev)
+      const next = clone(prev)
       fn(next)
       return next
     })
@@ -152,7 +184,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     sheetRef.current = clean
     setSheet(clean)
     remoteReady.current = true
-    if (mode === 'pull') await pull()
+    if (mode === 'pull') await pull(true)
     else await push()
   }, [pull, push])
 
@@ -162,13 +194,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveSheetConfig(null)
     sheetRef.current = null
     remoteReady.current = false
+    setDirty(false)
     setSheet(null)
     setSync({ state: 'off' })
-  }, [])
+  }, [setDirty])
 
   return (
     <StoreContext.Provider value={{
-      data, update, replace, sheet, sync, connectSheet, disconnectSheet, reloadFromSheet: pull, saveToSheetNow: push,
+      data, update, replace, sheet, sync, connectSheet, disconnectSheet, reloadFromSheet: () => pull(true), saveToSheetNow: push,
     }}>
       {children}
     </StoreContext.Provider>
