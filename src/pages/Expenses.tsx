@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { Card, Empty, Field, Modal, NumInput, PageHeader, Stat } from '../components/ui'
 import type { Bucket, Expense, PaymentMethod } from '../types'
 import { BucketPicker } from './Split'
+import { FAMILY, MemberSpending } from '../components/MemberSpending'
 import {
   BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, getAllocation, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
 } from '../utils'
@@ -15,15 +16,20 @@ export default function Expenses() {
   const [cat, setCat] = useState('')
   const [bucket, setBucket] = useState<Bucket | ''>('')
   const [q, setQ] = useState('')
+  const [member, setMember] = useState('') // '' = everyone, FAMILY = untagged, else a member id
   const [editing, setEditing] = useState<Expense | null>(null)
 
   const { map } = getAllocation(data)
   const all = expensesInMonth(data.expenses, ym)
   const bucketTotal = (b: Bucket) => sumBy(all.filter(e => bucketOf(e, map) === b), e => e.amount)
-  const list = all
+  const known = new Set(data.members.map(m => m.id))
+  // The per-member chart follows every filter except "who", so all members stay comparable
+  const filtered = all
     .filter(e => !bucket || bucketOf(e, map) === bucket)
     .filter(e => !cat || e.category === cat)
     .filter(e => !q || e.description.toLowerCase().includes(q.toLowerCase()))
+  const list = filtered
+    .filter(e => !member || (member === FAMILY ? !e.memberId || !known.has(e.memberId) : e.memberId === member))
     .sort((a, b) => (b.recurring ? 0 : 1) - (a.recurring ? 0 : 1) || b.date.localeCompare(a.date))
   const total = sumBy(all, e => e.amount)
   const byMethod = groupSum(all, e => e.method, e => e.amount)
@@ -50,6 +56,11 @@ export default function Expenses() {
         <Stat icon="🔁" label="Recurring" value={fmt(sumBy(all.filter(e => e.recurring), e => e.amount))} sub="fixed monthly costs" />
       </div>
 
+      <Card title="👥 Spending by family member" action={member && <button className="link" onClick={() => setMember('')}>Show everyone</button>}>
+        <p className="muted small mb">Each person's top categories this month{bucket || cat || q ? ' (matching your filters below)' : ''}. Tap a person to see only their expenses.</p>
+        <MemberSpending rows={filtered} members={data.members} map={map} selected={member} onSelect={setMember} />
+      </Card>
+
       <Card>
         <div className="seg bucket-filter mb">
           <button className={!bucket ? 'on' : ''} onClick={() => setBucket('')}>All · {fmt(total, { compact: true })}</button>
@@ -64,6 +75,11 @@ export default function Expenses() {
           <select value={cat} onChange={e => setCat(e.target.value)}>
             <option value="">All categories</option>
             {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={member} onChange={e => setMember(e.target.value)} aria-label="Who">
+            <option value="">Everyone</option>
+            {data.members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            <option value={FAMILY}>Whole family (shared)</option>
           </select>
         </div>
         {list.length ? (
