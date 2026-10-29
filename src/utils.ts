@@ -339,6 +339,27 @@ export function emiExpenseRows(data: AppData, ym: string): Expense[] {
       // An EMI given its own category (an iPhone → Shopping) follows that category; plain loans use the EMI setting
       bucket: e.category && e.category !== EMI_CATEGORY ? map[e.category] ?? emiBucket : emiBucket,
       instalment: `${monthsBetween(ymOf(e.startDate), ym) + 1}/${e.tenure}`,
+      paidMonths: e.paidMonths,
     }
   })
+}
+
+// ---------- Paid / still to pay ----------
+
+/** Monthly items (recurring bills, EMIs) are ticked per month; months already over count as paid. */
+export function isMonthly(e: Expense) {
+  return !!e.recurring || !!e.emiId
+}
+
+export function isPaid(e: Expense, ym: string) {
+  if (isMonthly(e)) return ym < currentYM() || !!e.paidMonths?.includes(ym)
+  return e.paid !== false
+}
+
+/** When this item falls due in `ym`: its own date, or for monthly items the same day in that month. */
+export function dueDate(e: Expense, ym: string) {
+  if (!e.recurring) return e.date
+  const [y, m] = ym.split('-').map(Number)
+  const day = Math.min(Number(e.date.slice(8)) || 1, new Date(y, m, 0).getDate())
+  return `${ym}-${String(day).padStart(2, '0')}`
 }
