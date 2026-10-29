@@ -3,7 +3,7 @@ import type { Allocation, AppData, Bucket, CreditCard, Emi, Expense, Income } fr
 export const EXPENSE_CATEGORIES = [
   'Food & Dining', 'Groceries', 'Rent & Housing', 'Utilities', 'Transport', 'Fuel',
   'Shopping', 'Entertainment', 'Health', 'Education', 'Travel', 'Insurance',
-  'Subscriptions', 'Personal Care', 'Gifts & Donations', 'Other',
+  'Subscriptions', 'Personal Care', 'Gifts & Donations', 'EMI & Loans', 'Other',
   'SIP & Mutual Funds', 'Stocks', 'Fixed Deposits', 'PPF / NPS / EPF', 'Gold', 'Other Investments',
 ]
 
@@ -18,7 +18,7 @@ export const BUCKET_LABEL: Record<Bucket, string> = { needs: 'Needs', wants: 'Wa
 export const DEFAULT_BUCKETS: Record<string, Bucket> = {
   'Food & Dining': 'wants', Groceries: 'needs', 'Rent & Housing': 'needs', Utilities: 'needs', Transport: 'needs',
   Fuel: 'needs', Shopping: 'wants', Entertainment: 'wants', Health: 'needs', Education: 'needs', Travel: 'wants',
-  Insurance: 'needs', Subscriptions: 'wants', 'Personal Care': 'wants', 'Gifts & Donations': 'wants', Other: 'wants',
+  Insurance: 'needs', 'EMI & Loans': 'needs', Subscriptions: 'wants', 'Personal Care': 'wants', 'Gifts & Donations': 'wants', Other: 'wants',
   'SIP & Mutual Funds': 'invest', Stocks: 'invest', 'Fixed Deposits': 'invest', 'PPF / NPS / EPF': 'invest',
   Gold: 'invest', 'Other Investments': 'invest',
 }
@@ -58,7 +58,7 @@ export const TRIP_CATEGORIES = [
 export const CATEGORY_EMOJI: Record<string, string> = {
   'Food & Dining': '🍽️', Groceries: '🛒', 'Rent & Housing': '🏠', Utilities: '💡', Transport: '🚕',
   Fuel: '⛽', Shopping: '🛍️', Entertainment: '🎬', Health: '🩺', Education: '🎓', Travel: '✈️',
-  Insurance: '🛡️', Subscriptions: '📺', 'Personal Care': '💇', 'Gifts & Donations': '🎁', Other: '📦',
+  Insurance: '🛡️', Subscriptions: '📺', 'Personal Care': '💇', 'Gifts & Donations': '🎁', 'EMI & Loans': '🏦', Other: '📦',
   Flights: '✈️', 'Train / Bus': '🚆', Stay: '🏨', Food: '🍜', 'Local Transport': '🛺',
   Activities: '🎢', 'Visa & Docs': '🛂', Misc: '🧳',
   'SIP & Mutual Funds': '📊', Stocks: '📈', 'Fixed Deposits': '🏦', 'PPF / NPS / EPF': '🧓', Gold: '🪙', 'Other Investments': '💼',
@@ -305,10 +305,40 @@ export function tripSettlement(travelers: string[], items: { actual: number; pai
 
 /** Month outflow per bucket; your share of EMIs goes to the bucket chosen in the allocation settings. */
 export function bucketTotals(data: AppData, ym: string) {
-  const { map, emiBucket } = getAllocation(data)
+  const { map } = getAllocation(data)
   const totals: Record<Bucket, number> = { needs: 0, wants: 0, invest: 0 }
-  for (const e of expensesInMonth(data.expenses, ym)) totals[bucketOf(e, map)] += e.amount
-  const emi = sumBy(data.emis.filter(e => emiDueIn(e, ym)), e => emiStatus(e).yourMonthly)
-  totals[emiBucket] += emi
-  return { ...totals, emi }
+  const emiRows = emiExpenseRows(data, ym)
+  for (const e of [...expensesInMonth(data.expenses, ym), ...emiRows]) totals[bucketOf(e, map)] += e.amount
+  return { ...totals, emi: sumBy(emiRows, e => e.amount) }
+}
+
+export const EMI_CATEGORY = 'EMI & Loans'
+
+/**
+ * One expense-shaped row per EMI instalment due in `ym`, so EMIs show up (and count) on the Expenses page.
+ * The amount is your share; family members' shares are tracked on the Shared EMIs tab.
+ */
+export function emiExpenseRows(data: AppData, ym: string): Expense[] {
+  const { emiBucket, map } = getAllocation(data)
+  const self = data.members.find(m => m.isSelf)?.id
+  return data.emis.filter(e => emiDueIn(e, ym)).map(e => {
+    const st = emiStatus(e)
+    const [y, m] = ym.split('-').map(Number)
+    const day = Math.min(Number(e.startDate.slice(8)) || 1, new Date(y, m, 0).getDate())
+    return {
+      id: `emi:${e.id}:${ym}`,
+      emiId: e.id,
+      description: `${e.title} EMI`,
+      category: e.category || EMI_CATEGORY,
+      amount: Math.round(st.yourMonthly * 100) / 100,
+      date: `${ym}-${String(day).padStart(2, '0')}`,
+      memberId: e.memberId ?? self,
+      method: e.cardId ? 'card' : 'bank',
+      cardId: e.cardId,
+      billed: true,
+      // An EMI given its own category (an iPhone → Shopping) follows that category; plain loans use the EMI setting
+      bucket: e.category && e.category !== EMI_CATEGORY ? map[e.category] ?? emiBucket : emiBucket,
+      instalment: `${monthsBetween(ymOf(e.startDate), ym) + 1}/${e.tenure}`,
+    }
+  })
 }

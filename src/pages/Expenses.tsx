@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useStore } from '../store'
 import { Card, Empty, Field, Modal, NumInput, PageHeader, Stat } from '../components/ui'
-import type { Bucket, Expense, PaymentMethod } from '../types'
+import type { Bucket, Emi, Expense, PaymentMethod } from '../types'
 import { BucketPicker } from './Split'
 import { FAMILY, MemberSpending } from '../components/MemberSpending'
+import { EmiForm } from './CreditCards'
 import {
-  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, getAllocation, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
+  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, emiExpenseRows, emiStatus, getAllocation, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
 } from '../utils'
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', bank: '🏦 Bank' }
@@ -18,9 +19,16 @@ export default function Expenses() {
   const [q, setQ] = useState('')
   const [member, setMember] = useState('') // '' = everyone, FAMILY = untagged, else a member id
   const [editing, setEditing] = useState<Expense | null>(null)
+  const [editingEmi, setEditingEmi] = useState<Emi | null>(null)
 
   const { map } = getAllocation(data)
-  const all = expensesInMonth(data.expenses, ym)
+  const emiRows = emiExpenseRows(data, ym)
+  const all = [...expensesInMonth(data.expenses, ym), ...emiRows]
+  const open = (e: Expense) => {
+    if (!e.emiId) return setEditing(e)
+    const emi = data.emis.find(x => x.id === e.emiId)
+    if (emi) setEditingEmi(emi)
+  }
   const bucketTotal = (b: Bucket) => sumBy(all.filter(e => bucketOf(e, map) === b), e => e.amount)
   const known = new Set(data.members.map(m => m.id))
   // The per-member chart follows every filter except "who", so all members stay comparable
@@ -36,6 +44,10 @@ export default function Expenses() {
   const days = ym === currentYM() ? Number(todayISO().slice(8)) : new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate()
   const cardName = (id?: string) => { const c = data.cards.find(c => c.id === id); return c ? `${c.bank} ${c.name}` : '' }
   const memberName = (id?: string) => data.members.find(m => m.id === id)?.name
+  const emiShared = (id: string) => {
+    const emi = data.emis.find(x => x.id === id)
+    return emi?.shares.length ? ` · your share of ${fmt(emiStatus(emi).monthly)}` : ''
+  }
 
   return (
     <div className="page">
@@ -46,11 +58,12 @@ export default function Expenses() {
             <span>{monthLabel(ym, true)}</span>
             <button className="icon-btn" onClick={() => setYm(addMonths(ym, 1))} aria-label="Next month">›</button>
           </div>
+          <button className="btn btn-ghost" onClick={() => setEditingEmi(newEmi(data.cards[0]?.id))}>+ Add EMI</button>
           <button className="btn" onClick={() => setEditing(newExpense())}>+ Add expense</button>
         </>} />
 
       <div className="grid stats-4">
-        <Stat icon="🧾" label="Total outflow" value={fmt(total)} sub={`${all.length} transactions · ${fmt(bucketTotal('invest'), { compact: true })} invested`} />
+        <Stat icon="🧾" label="Total outflow" value={fmt(total)} sub={`${all.length} entries · ${fmt(sumBy(emiRows, e => e.amount), { compact: true })} EMIs · ${fmt(bucketTotal('invest'), { compact: true })} invested`} />
         <Stat icon="📅" label="Daily average" value={fmt(total / Math.max(1, days))} />
         <Stat icon="💳" label="On cards" value={fmt(byMethod.card ?? 0)} sub={`${Math.round(((byMethod.card ?? 0) / (total || 1)) * 100)}% of spend`} />
         <Stat icon="🔁" label="Recurring" value={fmt(sumBy(all.filter(e => e.recurring), e => e.amount))} sub="fixed monthly costs" />
@@ -85,13 +98,14 @@ export default function Expenses() {
         {list.length ? (
           <ul className="tx-list">
             {list.map(e => (
-              <li key={e.id} className="tx" onClick={() => setEditing(e)}>
+              <li key={e.id} className="tx" onClick={() => open(e)}>
                 <span className="tx-icon">{CATEGORY_EMOJI[e.category] ?? '📦'}</span>
                 <div className="grow">
-                  <div>{e.description}<span className={`pill pill-${bucketOf(e, map)}`}>{BUCKET_LABEL[bucketOf(e, map)]}</span>{e.recurring && <span className="pill">monthly</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}</div>
+                  <div>{e.description}<span className={`pill pill-${bucketOf(e, map)}`}>{BUCKET_LABEL[bucketOf(e, map)]}</span>{e.recurring && <span className="pill">monthly</span>}{e.emiId && <span className="pill pill-emi">{e.cardId ? 'Card EMI' : 'Loan EMI'} {e.instalment}</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}</div>
                   <div className="muted small">
                     {e.recurring ? 'Every month' : dateLabel(e.date)} · {e.category} · {METHOD_LABEL[e.method]}{e.cardId && ` ${cardName(e.cardId)}`}
                     {memberName(e.memberId) && ` · for ${memberName(e.memberId)}`}
+                    {e.emiId && emiShared(e.emiId)}
                   </div>
                 </div>
                 <b>{fmt(e.amount)}</b>
@@ -101,10 +115,15 @@ export default function Expenses() {
         ) : <Empty icon="🧾" title="No expenses here" text="Add one, or change the month / filters." />}
       </Card>
 
+      {editingEmi && <EmiForm emi={editingEmi} onClose={() => setEditingEmi(null)} />}
       {editing && <ExpenseForm expense={editing} onClose={() => setEditing(null)}
         onDelete={id => update(d => { d.expenses = d.expenses.filter(x => x.id !== id) })} />}
     </div>
   )
+}
+
+export function newEmi(cardId?: string): Emi {
+  return { id: '', title: '', principal: 0, rate: 0, tenure: 12, startDate: todayISO(), shares: [], settlements: {}, cardId }
 }
 
 export function newExpense(extra: Partial<Expense> = {}): Expense {

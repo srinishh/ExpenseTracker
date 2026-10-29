@@ -4,7 +4,7 @@ import { Avatar, Card, Empty, Field, Modal, NumInput, PageHeader, Progress, Stat
 import { ExpenseForm, newExpense } from './Expenses'
 import type { CreditCard, Emi, EmiShare } from '../types'
 import {
-  CATEGORY_EMOJI, addMonths, cardStatus, currentYM, dateLabel, daysUntil, emiMonthly, emiStatus, fmt, monthLabel, pct,
+  EMI_CATEGORY, EXPENSE_CATEGORIES, CATEGORY_EMOJI, addMonths, cardStatus, currentYM, dateLabel, daysUntil, emiMonthly, emiStatus, fmt, monthLabel, pct,
   shareLedger, sumBy, todayISO, uid, ymOf,
 } from '../utils'
 
@@ -238,7 +238,7 @@ function EmisView() {
   )
 }
 
-function EmiForm({ emi, onClose }: { emi: Emi; onClose: () => void }) {
+export function EmiForm({ emi, onClose }: { emi: Emi; onClose: () => void }) {
   const { data, update } = useStore()
   const [f, setF] = useState(emi)
   const monthly = emiMonthly(f.principal, f.rate, f.tenure)
@@ -264,6 +264,16 @@ function EmiForm({ emi, onClose }: { emi: Emi; onClose: () => void }) {
           <select value={f.cardId ?? ''} onChange={e => setF({ ...f, cardId: e.target.value || undefined })}>
             <option value="">🏦 Bank loan / other</option>
             {data.cards.map(c => <option key={c.id} value={c.id}>💳 {c.bank} {c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Category" hint="Shown in expense charts">
+          <select value={f.category ?? EMI_CATEGORY} onChange={e => setF({ ...f, category: e.target.value === EMI_CATEGORY ? undefined : e.target.value })}>
+            {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="For">
+          <select value={f.memberId ?? data.members.find(m => m.isSelf)?.id ?? ''} onChange={e => setF({ ...f, memberId: e.target.value })}>
+            {data.members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </Field>
         <Field label="Amount financed"><NumInput required min={1} value={f.principal} placeholder="0" onChange={v => setF({ ...f, principal: v })} /></Field>
