@@ -5,7 +5,7 @@ import { Card, NumInput, PageHeader, Progress, Stat } from '../components/ui'
 import { MoneyTooltip } from './Dashboard'
 import type { Bucket } from '../types'
 import {
-  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, DEFAULT_BUCKETS, EXPENSE_CATEGORIES, SPLIT_PRESETS, addMonths, bucketOf, bucketTotals,
+  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, DEFAULT_BUCKETS, EXPENSE_CATEGORIES, SPLIT_PRESETS, addMonths, bucketOf, bucketTotals, emiExpenseRows,
   currentYM, expensesInMonth, fmt, getAllocation, groupSum, incomeInMonth, lastNMonths, monthLabel, pct,
 } from '../utils'
 
@@ -18,9 +18,8 @@ export default function Split() {
   const targetSum = alloc.targets.needs + alloc.targets.wants + alloc.targets.invest
 
   const byBucket = (b: Bucket) => {
-    const rows = expensesInMonth(data.expenses, ym).filter(e => bucketOf(e, alloc.map) === b)
+    const rows = [...expensesInMonth(data.expenses, ym), ...emiExpenseRows(data, ym)].filter(e => bucketOf(e, alloc.map) === b)
     const cats = Object.entries(groupSum(rows, e => e.category, e => e.amount)).map(([name, value]) => ({ name, value }))
-    if (alloc.emiBucket === b && totals.emi > 0) cats.push({ name: 'EMIs (your share)', value: totals.emi })
     return cats.sort((a, c) => c.value - a.value)
   }
 
@@ -83,7 +82,7 @@ export default function Split() {
                 <ul className="legend-list">
                   {cats.map(c => (
                     <li key={c.name}>
-                      <span>{CATEGORY_EMOJI[c.name] ?? (c.name.startsWith('EMI') ? '🏦' : '📦')}</span>
+                      <span>{CATEGORY_EMOJI[c.name] ?? '📦'}</span>
                       <span className="grow">{c.name}</span>
                       <span className="muted small">{totals[b.id] ? pct(c.value / totals[b.id] * 100) : ''}</span>
                       <b>{fmt(c.value)}</b>
@@ -142,7 +141,7 @@ export default function Split() {
         <div className="row-between wrap gap">
           <div>
             <b>EMIs count as</b>
-            <div className="muted small">Your share of loan & card EMIs goes into this bucket</div>
+            <div className="muted small">Your share of loan & card EMIs goes into this bucket, unless you give an EMI its own category</div>
           </div>
           <BucketPicker value={alloc.emiBucket} onChange={b => setAlloc(a => { a.emiBucket = b })} />
         </div>

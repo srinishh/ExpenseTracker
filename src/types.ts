@@ -33,6 +33,8 @@ export interface Expense {
   billed?: boolean // only meaningful for card spends; false = unbilled
   recurring?: boolean
   bucket?: Bucket // overrides the category's default bucket
+  emiId?: ID // set on rows generated from an EMI instalment (never stored)
+  instalment?: string // e.g. "5/12", for EMI rows
 }
 
 export type Bucket = 'needs' | 'wants' | 'invest'
@@ -69,6 +71,8 @@ export interface Emi {
   tenure: number // months
   startDate: string // first instalment date
   processingFee?: number
+  category?: string // what was bought, for category charts; defaults to 'EMI & Loans'
+  memberId?: ID // who it's for; defaults to the account owner
   shares: EmiShare[]
   // ym -> member ids that have paid back their share for that month
   settlements: Record<string, ID[]>
