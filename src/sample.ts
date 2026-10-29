@@ -54,13 +54,13 @@ export function sampleData(): AppData {
     expenses.push({ id: uid(), description, category, amount, date, method: 'upi', memberId: 'self', billed: offset !== 0, ...extra })
   }
   // Recurring monthly costs
-  expenses.push({ id: uid(), description: 'House rent', category: 'Rent & Housing', amount: 42000, date: m(-11, 3), method: 'bank', recurring: true })
+  expenses.push({ id: uid(), description: 'House rent', category: 'Rent & Housing', amount: 42000, date: m(-11, 3), method: 'bank', recurring: true, paidMonths: [ym] })
   expenses.push({ id: uid(), description: 'Netflix + Spotify', category: 'Subscriptions', amount: 848, date: m(-11, 9), method: 'card', cardId: 'axis', billed: true, recurring: true })
-  expenses.push({ id: uid(), description: 'Nifty 50 index fund SIP', category: 'SIP & Mutual Funds', amount: 15000, date: m(-11, 5), method: 'bank', recurring: true })
-  expenses.push({ id: uid(), description: 'PPF contribution', category: 'PPF / NPS / EPF', amount: 5000, date: m(-11, 10), method: 'bank', recurring: true })
+  expenses.push({ id: uid(), description: 'Nifty 50 index fund SIP', category: 'SIP & Mutual Funds', amount: 15000, date: m(-11, 5), method: 'bank', recurring: true, paidMonths: [ym] })
+  expenses.push({ id: uid(), description: 'PPF contribution', category: 'PPF / NPS / EPF', amount: 5000, date: m(-11, 10), method: 'bank', recurring: true, paidMonths: [ym] })
   expenses.push({ id: uid(), description: 'Bought HDFC Bank shares', category: 'Stocks', amount: 12000, date: m(-1, 16), method: 'bank' })
   expenses.push({ id: uid(), description: 'Digital gold', category: 'Gold', amount: 3000, date: m(0, Math.min(day, 6)), method: 'upi' })
-  expenses.push({ id: uid(), description: 'Term + health insurance', category: 'Insurance', amount: 4200, date: m(-11, 15), method: 'bank', recurring: true })
+  expenses.push({ id: uid(), description: 'Term + health insurance', category: 'Insurance', amount: 4200, date: m(-11, 15), method: 'bank', recurring: true, paidMonths: [ym] })
   // Variable spends for the last 6 months
   const pattern: [number, string, string, number, Partial<Expense>?][] = [
     [4, 'BigBasket order', 'Groceries', 6800, { method: 'card', cardId: 'icici' }],
@@ -99,7 +99,7 @@ export function sampleData(): AppData {
       settlements: { [addMonths(ym, -3)]: ['bro'], [addMonths(ym, -2)]: ['bro'] },
     },
     {
-      id: uid(), title: 'Car loan – Creta', principal: 900000, rate: 8.9, tenure: 60, startDate: m(-14, 5),
+      id: uid(), title: 'Car loan – Creta', principal: 900000, rate: 8.9, tenure: 60, startDate: m(-14, 5), paidMonths: [ym],
       shares: [{ memberId: 'spouse', percent: 40 }],
       settlements: Object.fromEntries(Array.from({ length: 14 }, (_, i) => [addMonths(ym, -14 + i), ['spouse']])),
     },

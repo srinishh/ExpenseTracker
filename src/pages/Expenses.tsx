@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { Card, Empty, Field, Modal, NumInput, PageHeader, Stat } from '../components/ui'
+import { Card, Empty, Field, Modal, NumInput, PageHeader, Progress, Stat } from '../components/ui'
 import type { Bucket, Emi, Expense, PaymentMethod } from '../types'
 import { BucketPicker } from './Split'
 import { FAMILY, MemberSpending } from '../components/MemberSpending'
 import { EmiForm } from './CreditCards'
 import {
-  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, emiExpenseRows, emiStatus, getAllocation, currentYM, dateLabel, expensesInMonth, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
+  BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, EXPENSE_CATEGORIES, addMonths, bucketOf, emiExpenseRows, emiStatus, getAllocation, currentYM, dateLabel, daysUntil, dueDate, expensesInMonth, isMonthly, isPaid, fmt, groupSum, monthLabel, sumBy, todayISO, uid,
 } from '../utils'
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = { upi: '📱 UPI', cash: '💵 Cash', card: '💳 Card', bank: '🏦 Bank' }
@@ -18,6 +18,7 @@ export default function Expenses() {
   const [bucket, setBucket] = useState<Bucket | ''>('')
   const [q, setQ] = useState('')
   const [member, setMember] = useState('') // '' = everyone, FAMILY = untagged, else a member id
+  const [unpaidOnly, setUnpaidOnly] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [editingEmi, setEditingEmi] = useState<Emi | null>(null)
 
@@ -38,12 +39,35 @@ export default function Expenses() {
     .filter(e => !q || e.description.toLowerCase().includes(q.toLowerCase()))
   const list = filtered
     .filter(e => !member || (member === FAMILY ? !e.memberId || !known.has(e.memberId) : e.memberId === member))
+    .filter(e => !unpaidOnly || !isPaid(e, ym))
     .sort((a, b) => (b.recurring ? 0 : 1) - (a.recurring ? 0 : 1) || b.date.localeCompare(a.date))
   const total = sumBy(all, e => e.amount)
   const byMethod = groupSum(all, e => e.method, e => e.amount)
   const days = ym === currentYM() ? Number(todayISO().slice(8)) : new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate()
   const cardName = (id?: string) => { const c = data.cards.find(c => c.id === id); return c ? `${c.bank} ${c.name}` : '' }
   const memberName = (id?: string) => data.members.find(m => m.id === id)?.name
+  const pastMonth = ym < currentYM()
+  const togglePaid = (e: Expense) => update(d => {
+    const flip = (months: string[] = []) => months.includes(ym) ? months.filter(m => m !== ym) : [...months, ym]
+    if (e.emiId) {
+      const emi = d.emis.find(x => x.id === e.emiId)
+      if (emi) emi.paidMonths = flip(emi.paidMonths)
+      return
+    }
+    const x = d.expenses.find(x => x.id === e.id)
+    if (!x) return
+    if (x.recurring) x.paidMonths = flip(x.paidMonths)
+    else if (x.paid === false) delete x.paid
+    else x.paid = false
+  })
+  const paidBox = (e: Expense) => {
+    const locked = pastMonth && isMonthly(e)
+    return (
+      <label className="paid-box" onClick={ev => ev.stopPropagation()} title={locked ? 'Past months count as paid' : isPaid(e, ym) ? 'Paid. Untick if it still needs paying' : 'Tick when paid'}>
+        <input type="checkbox" checked={isPaid(e, ym)} disabled={locked} onChange={() => togglePaid(e)} aria-label={`Paid: ${e.description}`} />
+      </label>
+    )
+  }
   const emiShared = (id: string) => {
     const emi = data.emis.find(x => x.id === id)
     return emi?.shares.length ? ` · your share of ${fmt(emiStatus(emi).monthly)}` : ''
@@ -68,6 +92,8 @@ export default function Expenses() {
         <Stat icon="💳" label="On cards" value={fmt(byMethod.card ?? 0)} sub={`${Math.round(((byMethod.card ?? 0) / (total || 1)) * 100)}% of spend`} />
         <Stat icon="🔁" label="Recurring" value={fmt(sumBy(all.filter(e => e.recurring), e => e.amount))} sub="fixed monthly costs" />
       </div>
+
+      <ToPay rows={all} ym={ym} paidBox={paidBox} onShowAll={() => { setUnpaidOnly(true); setMember(''); setBucket(''); setCat(''); setQ('') }} />
 
       <Card title="👥 Spending by family member" action={member && <button className="link" onClick={() => setMember('')}>Show everyone</button>}>
         <p className="muted small mb">Each person's top categories this month{bucket || cat || q ? ' (matching your filters below)' : ''}. Tap a person to see only their expenses.</p>
@@ -94,14 +120,16 @@ export default function Expenses() {
             {data.members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             <option value={FAMILY}>Whole family (shared)</option>
           </select>
+          <label className="check unpaid-toggle"><input type="checkbox" checked={unpaidOnly} onChange={e => setUnpaidOnly(e.target.checked)} /> Unpaid only</label>
         </div>
         {list.length ? (
           <ul className="tx-list">
             {list.map(e => (
-              <li key={e.id} className="tx" onClick={() => open(e)}>
+              <li key={e.id} className={`tx ${isPaid(e, ym) ? '' : 'unpaid'}`} onClick={() => open(e)}>
+                {paidBox(e)}
                 <span className="tx-icon">{CATEGORY_EMOJI[e.category] ?? '📦'}</span>
                 <div className="grow">
-                  <div>{e.description}<span className={`pill pill-${bucketOf(e, map)}`}>{BUCKET_LABEL[bucketOf(e, map)]}</span>{e.recurring && <span className="pill">monthly</span>}{e.emiId && <span className="pill pill-emi">{e.cardId ? 'Card EMI' : 'Loan EMI'} {e.instalment}</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}</div>
+                  <div>{e.description}<span className={`pill pill-${bucketOf(e, map)}`}>{BUCKET_LABEL[bucketOf(e, map)]}</span>{e.recurring && <span className="pill">monthly</span>}{e.emiId && <span className="pill pill-emi">{e.cardId ? 'Card EMI' : 'Loan EMI'} {e.instalment}</span>}{e.cardId && !e.billed && <span className="pill pill-warn">unbilled</span>}{!isPaid(e, ym) && <DuePill date={dueDate(e, ym)} />}</div>
                   <div className="muted small">
                     {e.recurring ? 'Every month' : dateLabel(e.date)} · {e.category} · {METHOD_LABEL[e.method]}{e.cardId && ` ${cardName(e.cardId)}`}
                     {memberName(e.memberId) && ` · for ${memberName(e.memberId)}`}
@@ -112,13 +140,61 @@ export default function Expenses() {
               </li>
             ))}
           </ul>
-        ) : <Empty icon="🧾" title="No expenses here" text="Add one, or change the month / filters." />}
+        ) : unpaidOnly
+          ? <Empty icon="🎉" title="Nothing left to pay" text="Everything matching these filters is paid." />
+          : <Empty icon="🧾" title="No expenses here" text="Add one, or change the month / filters." />}
       </Card>
 
       {editingEmi && <EmiForm emi={editingEmi} onClose={() => setEditingEmi(null)} />}
       {editing && <ExpenseForm expense={editing} onClose={() => setEditing(null)}
         onDelete={id => update(d => { d.expenses = d.expenses.filter(x => x.id !== id) })} />}
     </div>
+  )
+}
+
+function DuePill({ date }: { date: string }) {
+  const d = daysUntil(date)
+  if (d < 0) return <span className="pill pill-overdue">overdue {-d}d</span>
+  return <span className="pill pill-due">{d === 0 ? 'due today' : `due in ${d}d`}</span>
+}
+
+/** What this month still needs paying: overdue first, then by due date. */
+function ToPay({ rows, ym, paidBox, onShowAll }: {
+  rows: Expense[]; ym: string; paidBox: (e: Expense) => React.ReactNode; onShowAll: () => void
+}) {
+  const total = sumBy(rows, e => e.amount)
+  const unpaid = rows.filter(e => !isPaid(e, ym)).sort((a, b) => dueDate(a, ym).localeCompare(dueDate(b, ym)))
+  const left = sumBy(unpaid, e => e.amount)
+  const overdue = unpaid.filter(e => daysUntil(dueDate(e, ym)) < 0)
+  const shown = unpaid.slice(0, 6)
+  return (
+    <Card title={`✅ To pay · ${monthLabel(ym, true)}`}
+      action={unpaid.length > shown.length && <button className="link" onClick={onShowAll}>See all {unpaid.length} →</button>}>
+      <div className="topay-stats">
+        <div><span className="muted small">Still to pay</span><b className={left ? 'big' : 'big text-good'}>{fmt(left)}</b><span className="muted small">{unpaid.length} item{unpaid.length === 1 ? '' : 's'}</span></div>
+        <div><span className="muted small">Overdue</span><b className={`big ${overdue.length ? 'text-bad' : ''}`}>{fmt(sumBy(overdue, e => e.amount))}</b><span className="muted small">{overdue.length} item{overdue.length === 1 ? '' : 's'}</span></div>
+        <div className="grow">
+          <div className="row-between small"><span className="muted">Paid</span><span>{fmt(total - left)} of {fmt(total)}</span></div>
+          <Progress value={total - left} max={total || 1} tone="good" />
+        </div>
+      </div>
+      {shown.length ? (
+        <ul className="tx-list mt">
+          {shown.map(e => (
+            <li key={e.id} className="tx unpaid">
+              {paidBox(e)}
+              <span className="tx-icon">{CATEGORY_EMOJI[e.category] ?? '📦'}</span>
+              <div className="grow">
+                <div>{e.description}<DuePill date={dueDate(e, ym)} /></div>
+                <div className="muted small">{dateLabel(dueDate(e, ym))} · {e.emiId ? (e.cardId ? 'Card EMI' : 'Loan EMI') : e.recurring ? 'Monthly' : e.category}</div>
+              </div>
+              <b>{fmt(e.amount)}</b>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="muted mt">🎉 Everything for {monthLabel(ym, true)} is paid.</p>}
+      <p className="muted small mt">Tick the box when you pay. Monthly bills and EMIs reset each month, and one-off expenses count as paid unless you untick them.</p>
+    </Card>
   )
 }
 
@@ -140,6 +216,7 @@ export function ExpenseForm({ expense, onClose, onDelete, title }: {
     e.preventDefault()
     const clean: Expense = { ...f }
     if (!clean.bucket) delete clean.bucket
+    if (clean.paid !== false || clean.recurring) delete clean.paid
     if (clean.method !== 'card') { delete clean.cardId; delete clean.billed }
     else { clean.cardId = clean.cardId ?? data.cards[0]?.id; clean.billed = clean.billed ?? false }
     update(d => {
@@ -185,6 +262,12 @@ export function ExpenseForm({ expense, onClose, onDelete, title }: {
             {f.bucket && <button type="button" className="link" onClick={() => setF({ ...f, bucket: undefined })}>Use category default</button>}
           </div>
         </Field>
+        {!f.recurring && (
+          <label className="check span-2">
+            <input type="checkbox" checked={f.paid !== false} onChange={e => setF({ ...f, paid: e.target.checked ? undefined : false })} />
+            Already paid (untick to track it in "To pay")
+          </label>
+        )}
         <label className="check span-2">
           <input type="checkbox" checked={!!f.recurring} onChange={e => setF({ ...f, recurring: e.target.checked })} />
           Repeats every month (rent, subscriptions, insurance…)

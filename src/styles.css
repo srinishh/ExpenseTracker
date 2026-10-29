@@ -463,3 +463,14 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 .ms-value { font-variant-numeric: tabular-nums; color: var(--text); }
 @media (max-width: 520px) { .member-spend { grid-template-columns: 1fr; } }
 .pill-emi { background: color-mix(in srgb, var(--c-emi) 16%, transparent); color: var(--c-emi); }
+
+/* ---------- paid / to pay ---------- */
+.paid-box { display: grid; place-items: center; padding: 6px; margin: -6px 0 -6px -6px; cursor: pointer; }
+.paid-box input { width: 20px; height: 20px; cursor: pointer; }
+.paid-box input:disabled { cursor: default; opacity: 0.5; }
+.pill-due { background: var(--warn-soft); color: var(--warn); }
+.pill-overdue { background: var(--bad-soft); color: var(--bad); }
+.topay-stats { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.topay-stats > div:not(.grow) { display: flex; flex-direction: column; }
+.topay-stats .grow { min-width: 200px; }
+.unpaid-toggle { white-space: nowrap; flex: 0 0 auto !important; }
