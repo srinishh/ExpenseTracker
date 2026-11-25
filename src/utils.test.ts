@@ -184,6 +184,17 @@ describe('emiStatus schedule', () => {
     expect(st.startYM).toBe('2026-01')
   })
 
+  it('moves a 31st due date to the last day of shorter months', () => {
+    const emi31 = makeEmi({ startDate: '2026-01-31' })
+    expect(emiStatus(emi31, '2026-01-31').nextDueDate).toBe('2026-02-28')
+    expect(emiStatus(emi31, '2026-02-27').paid).toBe(1)
+    // The February instalment falls on the 28th, so it counts as paid that day
+    expect(emiStatus(emi31, '2026-02-28').paid).toBe(2)
+    expect(emiStatus(emi31, '2026-02-28').nextDueDate).toBe('2026-03-31')
+    expect(emiStatus(emi31, '2026-03-31').nextDueDate).toBe('2026-04-30')
+    expect(emiStatus(makeEmi({ startDate: '2027-01-30', tenure: 24 }), '2028-01-31').nextDueDate).toBe('2028-02-29') // leap year
+  })
+
   it('ends in the right month when the loan spans a year boundary', () => {
     expect(emiStatus(makeEmi({ startDate: '2026-11-05', tenure: 6 }), '2026-11-01').endYM).toBe('2027-04')
   })
