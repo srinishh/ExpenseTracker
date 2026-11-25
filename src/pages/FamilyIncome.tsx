@@ -4,7 +4,7 @@ import { Avatar, Card, Empty, Field, Modal, NumInput, PageHeader, Progress, Stat
 import { MoneyChart } from '../charts'
 import type { Income, Member } from '../types'
 import {
-  INCOME_CATEGORIES, PALETTE, currentYM, dateLabel, fmt, incomeInMonth, lastNMonths, monthLabel, pct, sumBy, todayISO, uid,
+  INCOME_CATEGORIES, PALETTE, countsInMonth, currentYM, dateLabel, fmt, incomeInMonth, lastNMonths, monthLabel, pct, sumBy, todayISO, uid,
 } from '../utils'
 
 export default function FamilyIncome() {
@@ -91,7 +91,7 @@ function MemberView({ member, onEditMember, onAdd, onEdit }: {
   const series = months.map(m => ({ label: monthLabel(m), income: incomeInMonth(data.incomes, m, member.id) }))
   const total12 = sumBy(series, s => s.income)
   const incomes = data.incomes.filter(i => i.memberId === member.id).sort((a, b) => b.date.localeCompare(a.date))
-  const recurring = incomes.filter(i => i.recurring)
+  const recurring = incomes.filter(i => i.recurring && countsInMonth(i, ym))
   const family = incomeInMonth(data.incomes, ym)
   const now = incomeInMonth(data.incomes, ym, member.id)
 
@@ -119,7 +119,7 @@ function MemberView({ member, onEditMember, onAdd, onEdit }: {
           <MoneyChart data={series} height={240} legend={false} series={[{ key: 'income', name: 'Income', color: member.color, radius: [4, 4, 0, 0], maxBarSize: 32 }]} />
         </Card>
         <Card title="By source">
-          {INCOME_CATEGORIES.map(c => ({ c, v: sumBy(incomes.filter(i => i.category === c), i => i.recurring ? i.amount : 0) + sumBy(incomes.filter(i => i.category === c && !i.recurring && months.includes(i.date.slice(0, 7))), i => i.amount) }))
+          {INCOME_CATEGORIES.map(c => ({ c, v: sumBy(incomes.filter(i => i.category === c && i.recurring && countsInMonth(i, ym)), i => i.amount) + sumBy(incomes.filter(i => i.category === c && !i.recurring && months.includes(i.date.slice(0, 7))), i => i.amount) }))
             .filter(x => x.v > 0).map(x => (
               <div key={x.c} className="row-between list-row"><span>{x.c}</span><b>{fmt(x.v)}</b></div>
             ))}
@@ -137,8 +137,8 @@ function MemberView({ member, onEditMember, onAdd, onEdit }: {
                   <tr key={i.id}>
                     <td>{i.source}</td>
                     <td><span className="pill">{i.category}</span></td>
-                    <td>{i.recurring ? `Since ${monthLabel(i.date.slice(0, 7))}` : dateLabel(i.date)}</td>
-                    <td>{i.recurring ? '🔁 Monthly' : 'One-time'}</td>
+                    <td>{i.recurring ? recurringSpan(i) : dateLabel(i.date)}</td>
+                    <td>{!i.recurring ? 'One-time' : i.endDate && i.endDate.slice(0, 7) < ym ? '⏹ Ended' : '🔁 Monthly'}</td>
                     <td className="num"><b>{fmt(i.amount)}</b></td>
                     <td className="actions">
                       <button className="icon-btn" onClick={() => onEdit(i)} aria-label="Edit">✎</button>
@@ -196,14 +196,22 @@ function MemberForm({ member, onClose, onDeleted }: { member: Member; onClose: (
   )
 }
 
+function recurringSpan(i: Income) {
+  const from = monthLabel(i.date.slice(0, 7))
+  return i.endDate ? `${from} – ${monthLabel(i.endDate.slice(0, 7))}` : `Since ${from}`
+}
+
 function IncomeForm({ income, onClose }: { income: Income; onClose: () => void }) {
   const { data, update } = useStore()
   const [f, setF] = useState(income)
   const save = (e: React.FormEvent) => {
     e.preventDefault()
+    const clean: Income = { ...f }
+    if (!clean.recurring || !clean.endDate) delete clean.endDate
+    if (clean.endDate && clean.endDate < clean.date) return alert('End date is before the start date')
     update(d => {
-      if (f.id) d.incomes = d.incomes.map(i => i.id === f.id ? f : i)
-      else d.incomes.push({ ...f, id: uid() })
+      if (clean.id) d.incomes = d.incomes.map(i => i.id === clean.id ? clean : i)
+      else d.incomes.push({ ...clean, id: uid() })
     })
     onClose()
   }
@@ -227,6 +235,11 @@ function IncomeForm({ income, onClose }: { income: Income; onClose: () => void }
           <input type="checkbox" checked={f.recurring} onChange={e => setF({ ...f, recurring: e.target.checked })} />
           Recurring every month (salary, rent, pension…)
         </label>
+        {f.recurring && (
+          <Field label="Ends on (optional)">
+            <input type="date" min={f.date} value={f.endDate ?? ''} onChange={e => setF({ ...f, endDate: e.target.value || undefined })} />
+          </Field>
+        )}
         <div className="form-actions span-2">
           <span className="grow" />
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>

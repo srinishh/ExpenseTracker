@@ -16,6 +16,7 @@ export interface Income {
   amount: number
   date: string // YYYY-MM-DD
   recurring: boolean // counts every month from `date` onwards
+  endDate?: string // YYYY-MM-DD, recurring only: last month it counts in (open-ended when absent)
   note?: string
 }
 

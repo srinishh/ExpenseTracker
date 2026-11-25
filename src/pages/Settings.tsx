@@ -16,9 +16,9 @@ export default function Settings() {
     const name = (id?: string) => data.members.find(m => m.id === id)?.name ?? ''
     const card = (id?: string) => { const c = data.cards.find(c => c.id === id); return c ? `${c.bank} ${c.name}` : '' }
     const rows = [
-      ['Type', 'Date', 'Description', 'Category', 'Member', 'Method', 'Card', 'Recurring', 'Amount'],
-      ...data.incomes.map(i => ['Income', i.date, i.source, i.category, name(i.memberId), '', '', i.recurring ? 'yes' : '', i.amount]),
-      ...data.expenses.map(e => ['Expense', e.date, e.description, e.category, name(e.memberId), e.method, card(e.cardId), e.recurring ? 'yes' : '', -e.amount]),
+      ['Type', 'Date', 'Description', 'Category', 'Member', 'Method', 'Card', 'Recurring', 'Ends', 'Amount'],
+      ...data.incomes.map(i => ['Income', i.date, i.source, i.category, name(i.memberId), '', '', i.recurring ? 'yes' : '', i.endDate ?? '', i.amount]),
+      ...data.expenses.map(e => ['Expense', e.date, e.description, e.category, name(e.memberId), e.method, card(e.cardId), e.recurring ? 'yes' : '', '', -e.amount]),
     ]
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     download(`transactions-${todayISO()}.csv`, csv, 'text/csv')
