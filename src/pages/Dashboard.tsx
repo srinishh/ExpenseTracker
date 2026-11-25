@@ -1,7 +1,4 @@
 import { useMemo, useState } from 'react'
-import {
-  Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts'
 import { useStore } from '../store'
 import { Avatar, Card, Empty, PageHeader, Progress, Stat } from '../components/ui'
 import {
@@ -9,6 +6,14 @@ import {
   expensesInMonth, fmt, groupSum, incomeInMonth, lastNMonths, monthLabel, pct, shareLedger, sumBy, todayISO, tripSettlement,
 } from '../utils'
 import type { PageId } from '../App'
+import { DonutChart, MoneyChart, type ChartSeries } from '../charts'
+
+const TREND_SERIES: ChartSeries[] = [
+  { key: 'income', name: 'Income', color: 'var(--c-income)', radius: [4, 4, 0, 0], maxBarSize: 28 },
+  { key: 'spend', name: 'Spending', color: 'var(--c-spend)', stack: 'out', maxBarSize: 28 },
+  { key: 'emi', name: 'EMIs', color: 'var(--c-emi)', stack: 'out', radius: [4, 4, 0, 0], maxBarSize: 28 },
+  { key: 'savings', name: 'Savings', color: 'var(--accent)', type: 'line' },
+]
 
 type Insight = { tone: 'good' | 'bad' | 'warn' | 'info'; icon: string; text: React.ReactNode }
 
@@ -159,19 +164,7 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
       <div className="grid cols-3-1">
         <Card title="Income vs outflow · last 6 months">
           <div className="chart">
-            <ResponsiveContainer width="100%" height={400}>
-              <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => fmt(v, { compact: true })} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
-                <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--hover)' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="income" name="Income" fill="var(--c-income)" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="spend" name="Spending" stackId="out" fill="var(--c-spend)" maxBarSize={28} />
-                <Bar dataKey="emi" name="EMIs" stackId="out" fill="var(--c-emi)" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Line dataKey="savings" name="Savings" stroke="var(--accent)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <MoneyChart data={trend} series={TREND_SERIES} height={400} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} />
           </div>
         </Card>
 
@@ -191,14 +184,7 @@ export default function Dashboard({ go }: { go: (p: PageId) => void }) {
           {byCat.length ? (
             <>
               <div className="donut-wrap">
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={byCat} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="var(--surface)">
-                      {byCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip content={<MoneyTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <DonutChart data={byCat} colors={PALETTE} height={200} />
                 <div className="donut-center"><div className="muted small">Total</div><b>{fmt(cur.spend, { compact: true })}</b></div>
               </div>
               <ul className="legend-list">
@@ -333,19 +319,4 @@ function Delta({ now, before, inverse }: { now: number; before: number; inverse?
   const change = ((now - before) / before) * 100
   const good = inverse ? change <= 0 : change >= 0
   return <span className={good ? 'text-good' : 'text-bad'}>{change >= 0 ? '▲' : '▼'} {pct(Math.abs(change))} vs last month</span>
-}
-
-export function MoneyTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color?: string; payload?: { fill?: string } }[]; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="tooltip">
-      {label && <div className="tooltip-title">{label}</div>}
-      {payload.map((p, i) => (
-        <div key={i} className="tooltip-row">
-          <span className="dot" style={{ background: p.color ?? p.payload?.fill }} />
-          <span>{p.name}</span><b>{fmt(p.value)}</b>
-        </div>
-      ))}
-    </div>
-  )
 }

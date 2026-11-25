@@ -474,3 +474,7 @@ code { background: var(--surface-2); border: 1px solid var(--border); border-rad
 .topay-stats > div:not(.grow) { display: flex; flex-direction: column; }
 .topay-stats .grow { min-width: 200px; }
 .unpaid-toggle { white-space: nowrap; flex: 0 0 auto !important; }
+
+/* Space holders while a chart or page chunk downloads */
+.chart-placeholder { width: 100%; border-radius: 8px; background: var(--hover); opacity: .5; }
+.page-loading { min-height: 60vh; }

@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useStore } from '../store'
 import { Avatar, Card, Empty, Field, Modal, NumInput, PageHeader, Progress, Stat, Tabs } from '../components/ui'
-import { MoneyTooltip } from './Dashboard'
+import { MoneyChart } from '../charts'
 import type { Income, Member } from '../types'
 import {
   INCOME_CATEGORIES, PALETTE, currentYM, dateLabel, fmt, incomeInMonth, lastNMonths, monthLabel, pct, sumBy, todayISO, uid,
@@ -45,19 +44,14 @@ export default function FamilyIncome() {
             <Stat icon="👥" label="Earning members" value={data.members.filter(m => incomeInMonth(data.incomes, ym, m.id) > 0).length} sub={`of ${data.members.length} members`} />
           </div>
           <Card title="Income by member · 12 months">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={months.map(m => ({ label: monthLabel(m), ...Object.fromEntries(data.members.map(mem => [mem.id, incomeInMonth(data.incomes, m, mem.id)])) }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => fmt(v, { compact: true })} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
-                <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--hover)' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {data.members.map((m, i) => (
-                  <Bar key={m.id} dataKey={m.id} name={m.name} stackId="a" fill={m.color} maxBarSize={32}
-                    radius={i === data.members.length - 1 ? [4, 4, 0, 0] : undefined} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
+            <MoneyChart
+              height={300}
+              data={months.map(m => ({ label: monthLabel(m), ...Object.fromEntries(data.members.map(mem => [mem.id, incomeInMonth(data.incomes, m, mem.id)])) }))}
+              series={data.members.map((m, i) => ({
+                key: m.id, name: m.name, color: m.color, stack: 'a', maxBarSize: 32,
+                radius: i === data.members.length - 1 ? [4, 4, 0, 0] : undefined,
+              }))}
+            />
           </Card>
           <div className="grid cols-2">
             {data.members.map(m => {
@@ -122,15 +116,7 @@ function MemberView({ member, onEditMember, onAdd, onEdit }: {
 
       <div className="grid cols-3-1">
         <Card title="Monthly income">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={series}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={v => fmt(v, { compact: true })} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
-              <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--hover)' }} />
-              <Bar dataKey="income" name="Income" fill={member.color} radius={[4, 4, 0, 0]} maxBarSize={32} />
-            </BarChart>
-          </ResponsiveContainer>
+          <MoneyChart data={series} height={240} legend={false} series={[{ key: 'income', name: 'Income', color: member.color, radius: [4, 4, 0, 0], maxBarSize: 32 }]} />
         </Card>
         <Card title="By source">
           {INCOME_CATEGORIES.map(c => ({ c, v: sumBy(incomes.filter(i => i.category === c), i => i.recurring ? i.amount : 0) + sumBy(incomes.filter(i => i.category === c && !i.recurring && months.includes(i.date.slice(0, 7))), i => i.amount) }))
