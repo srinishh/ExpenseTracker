@@ -1,16 +1,41 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useStore } from './store'
 import { emptyData } from './sample'
 import Dashboard from './pages/Dashboard'
-import FamilyIncome from './pages/FamilyIncome'
-import Expenses from './pages/Expenses'
-import CreditCards from './pages/CreditCards'
-import Trips from './pages/Trips'
-import Planning from './pages/Planning'
-import Settings from './pages/Settings'
-import Split from './pages/Split'
 import { SyncBadge } from './components/SheetSync'
-import { ExpenseForm, newExpense } from './pages/Expenses'
+import { preloadCharts } from './charts'
+
+// Dashboard is the landing page, so it ships in the main bundle. Every other
+// page is its own chunk, fetched when first opened (or quietly in the background).
+const loaders = {
+  income: () => import('./pages/FamilyIncome'),
+  expenses: () => import('./pages/Expenses'),
+  split: () => import('./pages/Split'),
+  cards: () => import('./pages/CreditCards'),
+  trips: () => import('./pages/Trips'),
+  planning: () => import('./pages/Planning'),
+  settings: () => import('./pages/Settings'),
+}
+const FamilyIncome = lazy(loaders.income)
+const Expenses = lazy(loaders.expenses)
+const Split = lazy(loaders.split)
+const CreditCards = lazy(loaders.cards)
+const Trips = lazy(loaders.trips)
+const Planning = lazy(loaders.planning)
+const Settings = lazy(loaders.settings)
+const QuickAddExpense = lazy(() => loaders.expenses().then(m => ({
+  default: ({ onClose }: { onClose: () => void }) => <m.ExpenseForm expense={m.newExpense()} onClose={onClose} />,
+})))
+
+// Once the first screen is up, warm the cache so later taps don't wait on the network.
+function preloadRest() {
+  const run = () => {
+    preloadCharts()
+    for (const load of Object.values(loaders)) load().catch(() => {})
+  }
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 4000 })
+  else setTimeout(run, 2000)
+}
 
 const PAGES = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -45,6 +70,7 @@ export default function App() {
   useEffect(() => {
     const onHash = () => setPage(readHash())
     window.addEventListener('hashchange', onHash)
+    preloadRest()
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
@@ -95,14 +121,16 @@ export default function App() {
             <button className="btn btn-sm" onClick={startFresh}>Start fresh</button>
           </div>
         )}
-        {page === 'dashboard' && <Dashboard go={go} />}
-        {page === 'income' && <FamilyIncome />}
-        {page === 'expenses' && <Expenses />}
-        {page === 'split' && <Split />}
-        {page === 'cards' && <CreditCards />}
-        {page === 'trips' && <Trips />}
-        {page === 'planning' && <Planning />}
-        {page === 'settings' && <Settings />}
+        <Suspense fallback={<div className="page-loading" aria-busy="true" />}>
+          {page === 'dashboard' && <Dashboard go={go} />}
+          {page === 'income' && <FamilyIncome />}
+          {page === 'expenses' && <Expenses />}
+          {page === 'split' && <Split />}
+          {page === 'cards' && <CreditCards />}
+          {page === 'trips' && <Trips />}
+          {page === 'planning' && <Planning />}
+          {page === 'settings' && <Settings />}
+        </Suspense>
       </main>
 
       <nav className="tabbar" aria-label="Main">
@@ -130,7 +158,7 @@ export default function App() {
         </div>
       )}
 
-      {quickAdd && <ExpenseForm expense={newExpense()} onClose={() => setQuickAdd(false)} />}
+      {quickAdd && <Suspense fallback={null}><QuickAddExpense onClose={() => setQuickAdd(false)} /></Suspense>}
     </div>
   )
 }

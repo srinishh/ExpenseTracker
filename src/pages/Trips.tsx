@@ -1,10 +1,14 @@
 import { useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useStore } from '../store'
 import { Card, Empty, Field, Modal, NumInput, PageHeader, Progress, Stat } from '../components/ui'
-import { MoneyTooltip } from './Dashboard'
+import { MoneyChart, type ChartSeries } from '../charts'
 import type { Trip, TripItem } from '../types'
 import { CATEGORY_EMOJI, TRIP_CATEGORIES, dateLabel, daysUntil, fmt, monthsBetween, parseISO, pct, sumBy, todayISO, tripSettlement, uid, ymOf } from '../utils'
+
+const TRIP_SERIES: ChartSeries[] = [
+  { key: 'planned', name: 'Planned', color: 'var(--c-planned)', radius: [0, 4, 4, 0], barSize: 12 },
+  { key: 'actual', name: 'Actual', color: 'var(--accent)', radius: [0, 4, 4, 0], barSize: 12 },
+]
 
 const EMOJIS = ['✈️', '🏝️', '⛰️', '🏰', '🏖️', '🗼', '🚗', '🛳️', '🏕️', '🎡', '🕌', '🌸']
 
@@ -158,17 +162,7 @@ function TripDetail({ trip, onEdit }: { trip: Trip; onEdit: () => void }) {
       <div className="grid cols-2">
         <Card title="Planned vs actual by category">
           {byCat.length ? (
-            <ResponsiveContainer width="100%" height={Math.max(160, byCat.length * 44)}>
-              <BarChart data={byCat} layout="vertical" margin={{ left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tickFormatter={v => fmt(v, { compact: true })} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--hover)' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="planned" name="Planned" fill="var(--c-planned)" radius={[0, 4, 4, 0]} barSize={12} />
-                <Bar dataKey="actual" name="Actual" fill="var(--accent)" radius={[0, 4, 4, 0]} barSize={12} />
-              </BarChart>
-            </ResponsiveContainer>
+            <MoneyChart data={byCat} series={TRIP_SERIES} xKey="name" horizontal height={Math.max(160, byCat.length * 44)} margin={{ left: 8, right: 8 }} />
           ) : <Empty icon="📊" title="Add items to see the breakdown" />}
         </Card>
 

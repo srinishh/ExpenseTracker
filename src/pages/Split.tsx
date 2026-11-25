@@ -1,13 +1,20 @@
 import { useState } from 'react'
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useStore } from '../store'
 import { Card, NumInput, PageHeader, Progress, Stat } from '../components/ui'
-import { MoneyTooltip } from './Dashboard'
+import { MoneyChart, type ChartSeries } from '../charts'
 import type { Bucket } from '../types'
 import {
   BUCKETS, BUCKET_LABEL, CATEGORY_EMOJI, DEFAULT_BUCKETS, EXPENSE_CATEGORIES, SPLIT_PRESETS, addMonths, bucketOf, bucketTotals, emiExpenseRows,
   currentYM, expensesInMonth, fmt, getAllocation, groupSum, incomeInMonth, lastNMonths, monthLabel, pct,
 } from '../utils'
+
+const TREND_SERIES: ChartSeries[] = [
+  ...BUCKETS.map((b, i): ChartSeries => ({
+    key: b.id, name: b.label, color: b.color, stack: 's', maxBarSize: 36,
+    radius: i === BUCKETS.length - 1 ? [4, 4, 0, 0] : undefined,
+  })),
+  { key: 'income', name: 'Income', color: 'var(--c-income)', type: 'line' },
+]
 
 export default function Split() {
   const { data, update } = useStore()
@@ -96,20 +103,7 @@ export default function Split() {
       </div>
 
       <Card title="Last 6 months">
-        <ResponsiveContainer width="100%" height={300}>
-          <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-            <YAxis tickFormatter={v => fmt(v, { compact: true })} tick={{ fill: 'var(--muted)', fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
-            <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'var(--hover)' }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            {BUCKETS.map((b, i) => (
-              <Bar key={b.id} dataKey={b.id} name={b.label} stackId="s" fill={b.color} maxBarSize={36}
-                radius={i === BUCKETS.length - 1 ? [4, 4, 0, 0] : undefined} />
-            ))}
-            <Line dataKey="income" name="Income" stroke="var(--c-income)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <MoneyChart data={trend} series={TREND_SERIES} height={300} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} />
       </Card>
 
       <Card title="⚙️ Your split">
