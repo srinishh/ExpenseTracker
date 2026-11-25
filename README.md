@@ -38,6 +38,7 @@ If you change `Code.gs` later, use **Deploy → Manage deployments → Edit → 
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # production build in dist/
+npm test         # unit tests for the money maths in src/utils.ts
 ```
 
 ## Deploy
