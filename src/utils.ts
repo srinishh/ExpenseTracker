@@ -149,10 +149,11 @@ export const pct = (v: number) => `${Math.round(v)}%`
 
 // ---------- Income & expense aggregation ----------
 
-/** Recurring entries count in every month on/after their start month. */
-function countsInMonth(entry: { date: string; recurring?: boolean }, ym: string) {
+/** Recurring entries count in every month from their start month up to their end month (if any). */
+export function countsInMonth(entry: { date: string; recurring?: boolean; endDate?: string }, ym: string) {
   const start = ymOf(entry.date)
-  return entry.recurring ? start <= ym : start === ym
+  if (!entry.recurring) return start === ym
+  return start <= ym && (!entry.endDate || ym <= ymOf(entry.endDate))
 }
 
 export function incomeInMonth(incomes: Income[], ym: string, memberId?: string) {
