@@ -185,11 +185,18 @@ export function emiMonthly(principal: number, annualRate: number, months: number
   return (principal * r * f) / (f - 1)
 }
 
+/** Day `day` of month `ym` as YYYY-MM-DD, moved back to the month's last day when the month is shorter (31 → 28 Feb). */
+function dayInMonth(ym: string, day: number) {
+  const [y, m] = ym.split('-').map(Number)
+  return `${ym}-${pad(Math.min(day || 1, new Date(y, m, 0).getDate()))}`
+}
+
 export function emiStatus(emi: Emi, today = todayISO()) {
   const monthly = emiMonthly(emi.principal, emi.rate, emi.tenure)
   const startYM = ymOf(emi.startDate)
   const nowYM = ymOf(today)
-  let paid = monthsBetween(startYM, nowYM) + (Number(today.slice(8)) >= Number(emi.startDate.slice(8)) ? 1 : 0)
+  const dueDay = Number(emi.startDate.slice(8))
+  let paid = monthsBetween(startYM, nowYM) + (today >= dayInMonth(nowYM, dueDay) ? 1 : 0)
   paid = Math.max(0, Math.min(emi.tenure, paid))
   const remaining = emi.tenure - paid
   const r = emi.rate / 12 / 100
@@ -214,7 +221,7 @@ export function emiStatus(emi: Emi, today = todayISO()) {
     yourMonthly: monthly * (1 - sharedPct / 100),
     active: remaining > 0 && paid > 0,
     nextDueYM,
-    nextDueDate: nextDueYM ? `${nextDueYM}-${emi.startDate.slice(8)}` : undefined,
+    nextDueDate: nextDueYM ? dayInMonth(nextDueYM, dueDay) : undefined,
   }
 }
 
@@ -323,15 +330,13 @@ export function emiExpenseRows(data: AppData, ym: string): Expense[] {
   const self = data.members.find(m => m.isSelf)?.id
   return data.emis.filter(e => emiDueIn(e, ym)).map(e => {
     const st = emiStatus(e)
-    const [y, m] = ym.split('-').map(Number)
-    const day = Math.min(Number(e.startDate.slice(8)) || 1, new Date(y, m, 0).getDate())
     return {
       id: `emi:${e.id}:${ym}`,
       emiId: e.id,
       description: `${e.title} EMI`,
       category: e.category || EMI_CATEGORY,
       amount: Math.round(st.yourMonthly * 100) / 100,
-      date: `${ym}-${String(day).padStart(2, '0')}`,
+      date: dayInMonth(ym, Number(e.startDate.slice(8))),
       memberId: e.memberId ?? self,
       method: e.cardId ? 'card' : 'bank',
       cardId: e.cardId,
@@ -359,7 +364,5 @@ export function isPaid(e: Expense, ym: string) {
 /** When this item falls due in `ym`: its own date, or for monthly items the same day in that month. */
 export function dueDate(e: Expense, ym: string) {
   if (!e.recurring) return e.date
-  const [y, m] = ym.split('-').map(Number)
-  const day = Math.min(Number(e.date.slice(8)) || 1, new Date(y, m, 0).getDate())
-  return `${ym}-${String(day).padStart(2, '0')}`
+  return dayInMonth(ym, Number(e.date.slice(8)))
 }
